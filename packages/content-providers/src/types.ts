@@ -1,0 +1,43 @@
+export type ProviderContentType = "VIDEO" | "WEBSITE";
+
+export interface ProviderVideoMetadata {
+  providerId: string; // e.g. "youtube"
+  providerRefId: string; // the provider's own id for this video
+  sourceUrl: string;
+  title: string;
+  description: string | null;
+  thumbnailUrl: string | null;
+  durationSeconds: number | null;
+  creatorName: string | null;
+  /**
+   * One input signal to the Supervision Score, never the score itself and never treated as
+   * a safety guarantee — see SUPERVISION_SCORE.md.
+   */
+  providerMadeForKids: boolean | null;
+  rawMetadata: Record<string, unknown>;
+}
+
+export interface EmbedInfo {
+  /** How the child client should render playback — an iframe src, a native player config, etc. */
+  embedUrl: string;
+  /**
+   * Provider-specific flags the child client must apply, e.g. YouTube's privacy-enhanced
+   * mode and disabling related-video suggestions — see ARCHITECTURE.md's note on why the
+   * "no unapproved recommendations" rule is enforced through embed parameters, not by
+   * reskinning a third-party player.
+   */
+  disableRelatedContent: boolean;
+}
+
+/**
+ * Implemented once per content source. `services/api` is the only caller — a provider
+ * adapter must never be imported by a client app, since only the API is allowed to hold
+ * the provider's API key (see SECURITY_AND_PRIVACY.md's secrets-handling section).
+ */
+export interface ContentProvider {
+  readonly id: string;
+  canHandle(url: string): boolean;
+  fetchVideoMetadata(url: string): Promise<ProviderVideoMetadata>;
+  fetchPlaylistItems(url: string): Promise<ProviderVideoMetadata[]>;
+  getEmbedInfo(providerRefId: string): EmbedInfo;
+}

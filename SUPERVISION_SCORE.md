@@ -1,0 +1,155 @@
+# Supervision Score
+
+## What it is
+
+A proprietary, independent 0–1000 safety rating computed per piece of content, optionally
+contextualized to a child's age range. Higher = lower assessed risk. It is **our** framework:
+a platform's own "made for kids" designation, when available, is ingested as one input
+signal alongside others — never adopted as the score itself, and never the sole factor in
+whether a category is scored well or poorly.
+
+It is never presented to a parent as a guarantee. Every score carries a confidence level and
+a plain-language explanation, and the UI language always frames it as a risk assessment,
+not a certification.
+
+## Score categories
+
+Each category is scored 0–100 (higher = safer) and rolled up into the 0–1000 overall score
+via a documented, versioned weighting (`SafetyCategory.weight`). Categories:
+
+Violence · Sexual Content · Nudity · Potential Grooming/Predatory Indicators · Fear ·
+Disturbing Imagery · Jump Scares · Profanity/Language · Drugs · Alcohol · Weapons · Self-Harm ·
+Dangerous Challenges · Bullying · Adult Themes · Advertising Manipulation · Gambling ·
+External-Link Risk · Hate/Extremist Content · Age Appropriateness.
+
+**On grooming/predatory indicators specifically**: the system never claims to determine
+whether a person is a predator. It surfaces pattern-based signals (e.g. a video/description/
+comments-off-platform-signal pattern historically correlated with grooming behavior) as
+"Potential grooming/predatory indicators detected", always with a confidence level and the
+specific factors that triggered it, and always requiring parent judgment before any action
+is taken. This category, like every other, contributes to the score — it is never the basis
+for an automated, unreviewable takedown.
+
+## Display
+
+```
+SUPERVISION SCORE
+934 / 1000
+LOW RISK
+
+Violence: 98/100
+Sexual Content: 100/100
+Fear/Disturbing Content: 82/100
+Language: 97/100
+Dangerous Behavior: 100/100
+Advertising Manipulation: 76/100
+Potential Grooming Indicators: 96/100
+
+[Why this score?]
+```
+
+Expanding "Why this score?" shows, per category: the detected factors, the confidence level,
+and (once available) links to the underlying signal (metadata field, transcript excerpt,
+etc.). Risk bands (illustrative, tunable): LOW RISK ≥ 900, MODERATE 700–899, ELEVATED
+500–699, HIGH < 500 — configurable per child via
+`Child.supervisionScoreMinimum` / `categoryThresholdOverrides`.
+
+## Engine architecture
+
+```ts
+interface ScoringInput {
+  content: ContentRecord;
+  providerMadeForKids: boolean | null;   // one signal, not the verdict
+  transcript?: string;                    // Milestone 7
+  frameSamples?: FrameSample[];            // Milestone 7
+  ocrText?: string[];                      // Milestone 7
+  externalLinksFound?: string[];           // Milestone 7
+  creatorSignals?: CreatorSignal;          // Milestone 7
+  parentReports?: ParentReportSummary[];   // Milestone 6+
+}
+
+interface CategoryScore {
+  categoryId: SafetyCategoryId;
+  score: number;       // 0-100
+  confidence: number;  // 0-1
+  detectedFactors: string[];
+}
+
+interface SupervisionScoreResult {
+  modelVersion: string;
+  overallScore: number;      // 0-1000
+  confidence: number;
+  categories: CategoryScore[];
+  explanation: string;
+  signalsUsed: (keyof ScoringInput)[];
+}
+
+interface SupervisionScorer {
+  readonly modelVersion: string;
+  score(input: ScoringInput): Promise<SupervisionScoreResult>;
+}
+```
+
+### Milestone 5 implementation (rule-based, metadata-only)
+
+`packages/supervision-score`'s first real scorer (`modelVersion: "rule-based-v1"`) uses only
+signals available without additional cost: provider metadata (title/description keyword
+matching against category-specific term lists), `providerMadeForKids`, duration, and
+category/topic tags. Every category starts from a neutral baseline and is only marked down
+when a specific signal is found — it never claims certainty it doesn't have, and every
+category result carries a confidence below 1.0 unless corroborated by a strong explicit
+signal (e.g. the provider's own age restriction flag).
+
+### Future analysis inputs (interfaces exist now, implementations land in Milestone 7)
+
+Metadata analysis (M5) → thumbnail image analysis → transcript analysis → audio
+transcription → sampled video-frame analysis → OCR of on-screen text → external-link
+analysis → creator/channel history signals → validated parent reports → historical
+moderation signals from the provider. Each becomes an additional producer of `ScoringInput`
+fields; the scorer interface and the storage model do not change when new inputs are added,
+only `signalsUsed` grows.
+
+## Versioning (non-negotiable)
+
+- A score is never overwritten in place. `ScoreVersion` rows are append-only;
+  `SupervisionScore.currentScoreVersionId` is repointed, and the prior version stays queryable
+  via `ScoreVersion.previousScoreVersionId`.
+- Every `ScoreVersion` stores: score, model version, analysis date, signals used, full
+  category breakdown, confidence, explanation, and a pointer to the previous version.
+- Re-scoring under a new model version (or new signals becoming available) always creates a
+  new `ScoreVersion` and, if the score moved meaningfully or crossed a child's threshold,
+  raises a `SafetyAlert` rather than silently changing what a child can see.
+
+## Parent thresholds
+
+- `Child.supervisionScoreMinimum`: overall floor (e.g. 950 for one child, 875 for another).
+- `Child.categoryThresholdOverrides`: per-category strict/moderate/relaxed override that can
+  raise (never silently lower below a safety floor the parent hasn't explicitly set) the
+  bar for a specific category, e.g. Violence: Strict, Fear: Moderate, Language: Strict,
+  Advertising: Moderate.
+- The parent's explicit approval always overrides the automated score where legally and
+  technically appropriate — a `ParentApproval` row is a final decision; the score informs,
+  it does not gate, a parent's own explicit choice.
+
+## Future: commercial Supervision Score API
+
+Architected, not exposed publicly in the MVP:
+
+```
+POST /api/v1/analyze
+{ "contentUrl": "...", "contentType": "video", "targetAge": 8 }
+
+→ {
+  "contentIdentifier": "...",
+  "supervisionScore": 934,
+  "categoryScores": { ... },
+  "confidence": 0.82,
+  "riskFlags": ["advertising_manipulation"],
+  "explanation": "...",
+  "analysisVersion": "rule-based-v1"
+}
+```
+
+This requires authentication, per-key rate limiting, and billing before it is exposed beyond
+this product's own internal callers — tracked as Milestone 10, and is namespaced `/api/v1/`
+now specifically so it can be split into its own service later without a breaking path change.

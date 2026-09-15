@@ -1,0 +1,546 @@
+// Full domain schema — see /DATABASE_SCHEMA.md for the human-readable map of this file.
+// Milestone 1 wires up business logic only for the tables marked [M1] there
+// (User, ParentAccount, Child, Device, AuditLog). Everything else is created now so later
+// milestones never need a destructive migration to introduce a missing concept.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Identity & accounts [M1]
+// ---------------------------------------------------------------------------
+
+enum UserRole {
+  PARENT
+  ADMIN
+}
+
+model User {
+  id                  String    @id @default(cuid())
+  email               String    @unique
+  passwordHash        String
+  role                UserRole  @default(PARENT)
+  emailVerifiedAt     DateTime?
+  mfaEnabled          Boolean   @default(false)
+  mfaSecretEncrypted  String?
+  pinHash             String?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  lastLoginAt         DateTime?
+
+  parentAccount       ParentAccount?
+  auditLogs           AuditLog[]
+  passwordResetTokens PasswordResetToken[]
+  refreshTokens       RefreshToken[]
+
+  @@map("users")
+}
+
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+  @@map("password_reset_tokens")
+}
+
+model RefreshToken {
+  id         String    @id @default(cuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  deviceId   String?
+  device     Device?   @relation(fields: [deviceId], references: [id], onDelete: SetNull)
+  tokenHash  String    @unique
+  expiresAt  DateTime
+  revokedAt  DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([userId])
+  @@map("refresh_tokens")
+}
+
+model ParentAccount {
+  id          String   @id @default(cuid())
+  userId      String   @unique
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  displayName String
+  timezone    String   @default("UTC")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  children           Child[]
+  devices            Device[]
+  playlists          Playlist[]
+  parentApprovals    ParentApproval[]
+  parentReports      ParentReport[]
+  searchRequests     SearchRequest[]
+  firstImportedContent Content[]
+
+  @@map("parent_accounts")
+}
+
+enum AgeRange {
+  AGE_3_5
+  AGE_6_8
+  AGE_9_12
+  AGE_13_15
+  AGE_16_17
+}
+
+model Child {
+  id                          String    @id @default(cuid())
+  parentAccountId             String
+  parentAccount               ParentAccount @relation(fields: [parentAccountId], references: [id], onDelete: Cascade)
+  firstName                   String
+  avatarUrl                   String?
+  ageRange                    AgeRange?
+  birthYear                   Int?
+  interests                   String[] @default([])
+  contentCategories            String[] @default([])
+  supervisionScoreMinimum     Int       @default(900)
+  categoryThresholdOverrides  Json?
+  dailyLimitMinutes           Int?
+  createdAt                   DateTime  @default(now())
+  updatedAt                   DateTime  @updatedAt
+  archivedAt                  DateTime?
+
+  devices              Device[]
+  parentApprovals      ParentApproval[]
+  contentPermissions   ChildContentPermission[]
+  viewingHistory       ViewingHistory[]
+  screenTimeRule       ScreenTimeRule?
+  safetyAlerts         SafetyAlert[]
+  parentReports        ParentReport[]
+  searchRequests       SearchRequest[]
+
+  @@index([parentAccountId])
+  @@map("children")
+}
+
+enum DevicePlatform {
+  WEB
+  IOS
+  ANDROID
+  TV
+}
+
+model Device {
+  id               String          @id @default(cuid())
+  parentAccountId  String
+  parentAccount    ParentAccount   @relation(fields: [parentAccountId], references: [id], onDelete: Cascade)
+  childId          String?
+  child            Child?          @relation(fields: [childId], references: [id], onDelete: SetNull)
+  label            String
+  platform         DevicePlatform  @default(WEB)
+  lastSeenAt       DateTime?
+  createdAt        DateTime        @default(now())
+  revokedAt        DateTime?
+
+  refreshTokens    RefreshToken[]
+  viewingHistory   ViewingHistory[]
+
+  @@index([parentAccountId])
+  @@index([childId])
+  @@map("devices")
+}
+
+model AuditLog {
+  id           String   @id @default(cuid())
+  actorUserId  String?
+  actor        User?    @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
+  actorRole    String
+  action       String
+  targetType   String
+  targetId     String?
+  metadata     Json?
+  createdAt    DateTime @default(now())
+
+  @@index([actorUserId])
+  @@index([action])
+  @@index([targetType, targetId])
+  @@map("audit_logs")
+}
+
+// ---------------------------------------------------------------------------
+// Content domain (Milestone 2+)
+// ---------------------------------------------------------------------------
+
+model ContentProvider {
+  id                 String    @id // e.g. "youtube", "vimeo", "website"
+  displayName        String
+  apiBaseUrl         String?
+  requiresOfficialApi Boolean  @default(true)
+  enabled            Boolean   @default(true)
+
+  content Content[]
+
+  @@map("content_providers")
+}
+
+enum ContentType {
+  VIDEO
+  WEBSITE
+}
+
+model Content {
+  id                          String       @id @default(cuid())
+  providerId                  String
+  provider                    ContentProvider @relation(fields: [providerId], references: [id])
+  providerRefId               String
+  contentType                 ContentType
+  sourceUrl                   String
+  title                       String
+  description                 String?
+  thumbnailUrl                String?
+  durationSeconds             Int?
+  creatorName                 String?
+  providerMadeForKids         Boolean?
+  rawMetadata                 Json?
+  firstImportedByParentAccountId String?
+  firstImportedByParentAccount ParentAccount? @relation(fields: [firstImportedByParentAccountId], references: [id], onDelete: SetNull)
+  createdAt                   DateTime     @default(now())
+  updatedAt                   DateTime     @updatedAt
+
+  video                Video?
+  website              Website?
+  playlistItems        PlaylistItem[]
+  parentApprovals      ParentApproval[]
+  contentPermissions   ChildContentPermission[]
+  viewingHistory       ViewingHistory[]
+  supervisionScore     SupervisionScore?
+  scoreVersions        ScoreVersion[]
+  safetyAlerts         SafetyAlert[]
+  parentReports        ParentReport[]
+  aiRecommendations    AIRecommendation[]
+
+  @@unique([providerId, providerRefId])
+  @@map("content")
+}
+
+model Video {
+  id                    String    @id @default(cuid())
+  contentId             String    @unique
+  content               Content   @relation(fields: [contentId], references: [id], onDelete: Cascade)
+  captionsAvailable     Boolean   @default(false)
+  transcriptFetchedAt   DateTime?
+  ageMetadataRaw        Json?
+
+  @@map("videos")
+}
+
+model Website {
+  id                       String  @id @default(cuid())
+  contentId                String  @unique
+  content                  Content @relation(fields: [contentId], references: [id], onDelete: Cascade)
+  allowedDomain            String
+  allowedPathPrefix        String?
+  blockExternalNavigation  Boolean @default(true)
+
+  @@map("websites")
+}
+
+model Playlist {
+  id                 String   @id @default(cuid())
+  providerId         String?
+  providerRefId      String?
+  ownerParentAccountId String
+  ownerParentAccount ParentAccount @relation(fields: [ownerParentAccountId], references: [id], onDelete: Cascade)
+  title              String
+  description        String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  items PlaylistItem[]
+
+  @@index([ownerParentAccountId])
+  @@map("playlists")
+}
+
+model PlaylistItem {
+  id         String   @id @default(cuid())
+  playlistId String
+  playlist   Playlist @relation(fields: [playlistId], references: [id], onDelete: Cascade)
+  contentId  String
+  content    Content  @relation(fields: [contentId], references: [id], onDelete: Cascade)
+  position   Int
+  addedAt    DateTime @default(now())
+
+  viewingHistory ViewingHistory[]
+
+  @@unique([playlistId, contentId])
+  @@index([playlistId])
+  @@map("playlist_items")
+}
+
+// ---------------------------------------------------------------------------
+// Approval domain (Milestone 2+)
+// ---------------------------------------------------------------------------
+
+enum ApprovalDecision {
+  APPROVED
+  REJECTED
+}
+
+enum ApprovalSource {
+  MANUAL
+  AI_DISCOVERY
+  PLAYLIST_IMPORT
+  AUTO_RULE
+}
+
+model ParentApproval {
+  id               String           @id @default(cuid())
+  parentAccountId  String
+  parentAccount    ParentAccount    @relation(fields: [parentAccountId], references: [id], onDelete: Cascade)
+  childId          String
+  child            Child            @relation(fields: [childId], references: [id], onDelete: Cascade)
+  contentId        String
+  content          Content          @relation(fields: [contentId], references: [id], onDelete: Cascade)
+  decision         ApprovalDecision
+  decidedAt        DateTime         @default(now())
+  decidedByUserId  String?
+  source           ApprovalSource   @default(MANUAL)
+  notes            String?
+
+  contentPermission ChildContentPermission?
+
+  @@unique([childId, contentId])
+  @@index([parentAccountId])
+  @@index([childId])
+  @@map("parent_approvals")
+}
+
+model ChildContentPermission {
+  id            String         @id @default(cuid())
+  childId       String
+  child         Child          @relation(fields: [childId], references: [id], onDelete: Cascade)
+  contentId     String
+  content       Content        @relation(fields: [contentId], references: [id], onDelete: Cascade)
+  grantedAt     DateTime       @default(now())
+  grantedViaId  String         @unique
+  grantedVia    ParentApproval @relation(fields: [grantedViaId], references: [id], onDelete: Cascade)
+
+  @@unique([childId, contentId])
+  @@index([childId])
+  @@map("child_content_permissions")
+}
+
+// ---------------------------------------------------------------------------
+// Viewing (Milestone 3/6)
+// ---------------------------------------------------------------------------
+
+model ViewingHistory {
+  id                     String        @id @default(cuid())
+  childId                String
+  child                  Child         @relation(fields: [childId], references: [id], onDelete: Cascade)
+  contentId              String
+  content                Content       @relation(fields: [contentId], references: [id], onDelete: Cascade)
+  deviceId               String?
+  device                 Device?       @relation(fields: [deviceId], references: [id], onDelete: SetNull)
+  playlistItemId         String?
+  playlistItem           PlaylistItem? @relation(fields: [playlistItemId], references: [id], onDelete: SetNull)
+  startedAt              DateTime      @default(now())
+  durationWatchedSeconds Int           @default(0)
+  completionPercentage   Float         @default(0)
+
+  @@index([childId])
+  @@index([contentId])
+  @@map("viewing_history")
+}
+
+model ScreenTimeRule {
+  id               String   @id @default(cuid())
+  childId          String   @unique
+  child            Child    @relation(fields: [childId], references: [id], onDelete: Cascade)
+  dailyLimitMinutes Int?
+  allowedWindows   Json?
+  timezone         String   @default("UTC")
+
+  @@map("screen_time_rules")
+}
+
+// ---------------------------------------------------------------------------
+// Safety domain (Milestone 5/6)
+// ---------------------------------------------------------------------------
+
+model SafetyCategory {
+  id          String  @id // e.g. "violence", "grooming_indicators"
+  displayName String
+  description String?
+  weight      Float   @default(1.0)
+
+  categoryResults ScoreCategoryResult[]
+
+  @@map("safety_categories")
+}
+
+model SupervisionScore {
+  id                    String      @id @default(cuid())
+  contentId             String      @unique
+  content               Content     @relation(fields: [contentId], references: [id], onDelete: Cascade)
+  currentScoreVersionId String      @unique
+  currentScoreVersion   ScoreVersion @relation("CurrentVersion", fields: [currentScoreVersionId], references: [id])
+
+  @@map("supervision_scores")
+}
+
+model ScoreVersion {
+  id                     String    @id @default(cuid())
+  contentId              String
+  content                Content   @relation(fields: [contentId], references: [id], onDelete: Cascade)
+  modelVersion           String
+  overallScore           Int
+  confidence             Float
+  analyzedAt             DateTime  @default(now())
+  signalsUsed            Json
+  explanation            String
+  previousScoreVersionId String?   @unique
+  previousScoreVersion   ScoreVersion? @relation("VersionHistory", fields: [previousScoreVersionId], references: [id])
+  nextScoreVersion       ScoreVersion? @relation("VersionHistory")
+
+  categoryResults        ScoreCategoryResult[]
+  currentFor             SupervisionScore?     @relation("CurrentVersion")
+  safetyAlertsFrom        SafetyAlert[]         @relation("PreviousScoreVersion")
+  safetyAlertsTo          SafetyAlert[]         @relation("NewScoreVersion")
+
+  @@index([contentId])
+  @@map("score_versions")
+}
+
+model ScoreCategoryResult {
+  id               String         @id @default(cuid())
+  scoreVersionId   String
+  scoreVersion     ScoreVersion   @relation(fields: [scoreVersionId], references: [id], onDelete: Cascade)
+  safetyCategoryId String
+  safetyCategory   SafetyCategory @relation(fields: [safetyCategoryId], references: [id])
+  score            Int
+  confidence       Float
+  detectedFactors  Json
+  notes            String?
+
+  @@index([scoreVersionId])
+  @@map("score_category_results")
+}
+
+enum AlertType {
+  NEW_SAFETY_INFO
+  SCORE_DROPPED
+  PROVIDER_FLAG_CHANGED
+  PARENT_REPORT_VALIDATED
+}
+
+enum AlertStatus {
+  OPEN
+  KEPT_APPROVED
+  REMOVED
+}
+
+model SafetyAlert {
+  id                     String        @id @default(cuid())
+  contentId              String
+  content                Content       @relation(fields: [contentId], references: [id], onDelete: Cascade)
+  childId                String?
+  child                  Child?        @relation(fields: [childId], references: [id], onDelete: Cascade)
+  alertType              AlertType
+  previousScoreVersionId String?
+  previousScoreVersion   ScoreVersion? @relation("PreviousScoreVersion", fields: [previousScoreVersionId], references: [id])
+  newScoreVersionId      String?
+  newScoreVersion        ScoreVersion? @relation("NewScoreVersion", fields: [newScoreVersionId], references: [id])
+  status                 AlertStatus   @default(OPEN)
+  createdAt              DateTime      @default(now())
+  resolvedAt             DateTime?
+  resolvedByUserId       String?
+
+  @@index([contentId])
+  @@index([childId])
+  @@map("safety_alerts")
+}
+
+enum ReportCategory {
+  INAPPROPRIATE_CONTENT
+  VIOLENCE
+  SEXUAL_CONTENT
+  DISTURBING_IMAGERY
+  GROOMING_INDICATORS
+  DANGEROUS_CHALLENGE
+  MISLEADING_AGE_CLASSIFICATION
+  ADVERTISING
+  OTHER
+}
+
+enum ReportStatus {
+  SUBMITTED
+  REVIEWED
+  VALIDATED
+  DISMISSED
+}
+
+model ParentReport {
+  id                       String        @id @default(cuid())
+  reportingParentAccountId String
+  reportingParentAccount   ParentAccount @relation(fields: [reportingParentAccountId], references: [id], onDelete: Cascade)
+  contentId                String
+  content                  Content       @relation(fields: [contentId], references: [id], onDelete: Cascade)
+  childId                  String?
+  child                    Child?        @relation(fields: [childId], references: [id], onDelete: SetNull)
+  category                 ReportCategory
+  details                  String?
+  status                   ReportStatus  @default(SUBMITTED)
+  createdAt                DateTime      @default(now())
+  reviewedAt               DateTime?
+
+  @@index([contentId])
+  @@map("parent_reports")
+}
+
+// ---------------------------------------------------------------------------
+// Discovery (Milestone 4)
+// ---------------------------------------------------------------------------
+
+model SearchRequest {
+  id               String   @id @default(cuid())
+  parentAccountId  String
+  parentAccount    ParentAccount @relation(fields: [parentAccountId], references: [id], onDelete: Cascade)
+  childId          String?
+  child            Child?   @relation(fields: [childId], references: [id], onDelete: SetNull)
+  rawQuery         String
+  structuredQuery  Json
+  createdAt        DateTime @default(now())
+
+  recommendations AIRecommendation[]
+
+  @@index([parentAccountId])
+  @@map("search_requests")
+}
+
+enum RecommendationDecision {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model AIRecommendation {
+  id              String                  @id @default(cuid())
+  searchRequestId String
+  searchRequest   SearchRequest           @relation(fields: [searchRequestId], references: [id], onDelete: Cascade)
+  contentId       String
+  content         Content                 @relation(fields: [contentId], references: [id], onDelete: Cascade)
+  matchReason     String
+  rank            Int
+  presentedAt     DateTime                @default(now())
+  parentDecision  RecommendationDecision  @default(PENDING)
+
+  @@index([searchRequestId])
+  @@map("ai_recommendations")
+}
