@@ -6,6 +6,7 @@ import { loadEnv } from "@app/config";
 import authPlugin from "./plugins/auth.js";
 import authRoutes from "./routes/auth.js";
 import parentRoutes from "./routes/parents.js";
+import contentRoutes from "./routes/content.js";
 import { createEmailSender } from "./services/email.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
@@ -34,6 +35,7 @@ export async function buildApp(): Promise<FastifyInstance> {
     async (instance) => {
       instance.addHook("preHandler", instance.requireParentSession);
       await parentRoutes(instance);
+      await contentRoutes(instance, { env });
     },
     { prefix: "/api/parents" },
   );

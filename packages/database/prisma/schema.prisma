@@ -86,6 +86,7 @@ model ParentAccount {
   parentReports      ParentReport[]
   searchRequests     SearchRequest[]
   firstImportedContent Content[]
+  contentSubmissions ContentSubmission[]
 
   @@map("parent_accounts")
 }
@@ -223,9 +224,31 @@ model Content {
   safetyAlerts         SafetyAlert[]
   parentReports        ParentReport[]
   aiRecommendations    AIRecommendation[]
+  submissions          ContentSubmission[]
 
   @@unique([providerId, providerRefId])
   @@map("content")
+}
+
+// Content is deduplicated globally by (providerId, providerRefId) — see the note on Content
+// above — so a second, unrelated parent submitting the same public video reuses the same
+// metadata row rather than re-fetching the provider API. That means Content on its own
+// cannot answer "what has this parent submitted" (only firstImportedByParentAccountId, i.e.
+// whoever happened to be first, could). ContentSubmission is the many-to-many record of
+// every parent account's own submission queue, independent of who imported it first — this
+// is what "Pending Reviews" and "my submitted content" are actually queried against.
+model ContentSubmission {
+  id               String        @id @default(cuid())
+  parentAccountId  String
+  parentAccount    ParentAccount @relation(fields: [parentAccountId], references: [id], onDelete: Cascade)
+  contentId        String
+  content          Content       @relation(fields: [contentId], references: [id], onDelete: Cascade)
+  submittedByUserId String?
+  createdAt        DateTime      @default(now())
+
+  @@unique([parentAccountId, contentId])
+  @@index([parentAccountId])
+  @@map("content_submissions")
 }
 
 model Video {

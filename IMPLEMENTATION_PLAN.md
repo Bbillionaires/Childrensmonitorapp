@@ -101,12 +101,46 @@ provider are flagged for legal review, not resolved unilaterally by this impleme
    for the sections listed in PRODUCT_REQUIREMENTS.md, most as "coming in Milestone N"
    placeholders), and full child-profile management (create/edit/list/archive) calling the
    real API.
-8. Automated tests (`services/api`, Vitest + Supertest): a parent cannot read/mutate another
-   parent's children; an unauthenticated request to any `/api/parents/*` or `/api/child/*`
-   route is rejected; password hashes are never returned by any endpoint.
+8. Automated tests (`services/api`, Vitest against Fastify's own `inject()` — no separate
+   HTTP server or Supertest needed): a parent cannot read/mutate another parent's children;
+   an unauthenticated request to any `/api/parents/*` or `/api/child/*` route is rejected;
+   password hashes are never returned by any endpoint.
 9. Commit and push to `claude/parental-control-mvp-3samwq`.
 
-## Milestones 2–10
+**Status: done.** Verified against a live local Postgres, including a full browser
+walkthrough (register → dashboard → create/edit child).
+
+## Milestone 2 — exact implementation plan (done)
+
+1. Schema addition: `ContentSubmission` (parent ↔ content join table) — needed because
+   `Content` is deduplicated globally by (providerId, providerRefId), so it alone can't
+   answer "what has this parent submitted." See DATABASE_SCHEMA.md.
+2. `packages/content-providers`: a real `YouTubeContentProvider` (YouTube Data API v3 —
+   video URL/ID parsing, `videos.list` metadata fetch, `playlistItems.list` pagination,
+   a privacy-enhanced embed URL). `canHandle()` needs no API key, so a YouTube URL is always
+   recognized as one; fetching metadata without `YOUTUBE_API_KEY` configured throws a clear
+   `ContentProviderNotConfiguredError` instead of silently misfiling it as a website or
+   fabricating data.
+3. `services/api`: `submitContentUrl` (resolve via the provider registry or fall back to a
+   website whitelist entry — no scraping either way), `decideApproval` (the only code path
+   that can create or delete a `ChildContentPermission`, transactionally with the
+   `ParentApproval` it comes from), and the review-queue query per child/filter.
+4. Routes: `POST /api/parents/content/submit`, `GET /api/parents/content`,
+   `GET /api/parents/children/:childId/queue`, `POST /api/parents/children/:childId/decisions`
+   — all behind the same parent-session + CSRF + per-child ownership checks as Milestone 1.
+5. `apps/web`: real Pending Reviews (submit a URL, approve/reject per child) and Approved
+   Content pages, replacing their Milestone 1 placeholders.
+6. Tests: website submission + dedup, a YouTube submission failing honestly without a key,
+   approve/reject correctly granting/revoking `ChildContentPermission`, and the same
+   cross-parent isolation guarantee extended to content and approvals.
+
+**Status: done**, except the YouTube adapter's live API calls — no `YOUTUBE_API_KEY` was
+available in this environment, so only its URL-parsing/response-mapping logic is
+unit-tested (against YouTube's documented response shape via a mocked `fetch`), not a real
+network call. Everything else (website submission, the approval pipeline, the UI) is
+verified against the live local Postgres and a real browser session.
+
+## Milestones 3–10
 
 Unchanged from PRODUCT_REQUIREMENTS.md's list; each will get this same treatment (a short
 plan reviewed before implementation, external-credential stop points called out explicitly)

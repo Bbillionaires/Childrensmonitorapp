@@ -80,6 +80,10 @@ including what the credential is for, where to obtain it, and which environment 
 
 ## Status
 
-Milestone 1 is implemented: monorepo scaffold, full domain database schema, parent
-authentication (email/password + PIN + MFA-ready), parent dashboard shell, and child profile
-management. See [IMPLEMENTATION_PLAN.md](./IMPLEMENTATION_PLAN.md) for what's next.
+Milestones 1 and 2 are implemented: monorepo scaffold, full domain database schema, parent
+authentication (email/password + PIN + MFA-ready), parent dashboard shell, child profile
+management, URL submission (a real YouTube adapter plus a website-whitelist fallback — no
+scraping either way), and the parent approval pipeline that's the only thing able to make
+content visible to a child. See [IMPLEMENTATION_PLAN.md](./IMPLEMENTATION_PLAN.md) for
+what's next, and note that the YouTube adapter's live API calls are untested in this
+environment — `YOUTUBE_API_KEY` was never configured here.

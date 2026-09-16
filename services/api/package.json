@@ -13,6 +13,7 @@
   "dependencies": {
     "@app/auth": "workspace:*",
     "@app/config": "workspace:*",
+    "@app/content-providers": "workspace:*",
     "@app/database": "workspace:*",
     "@app/types": "workspace:*",
     "@fastify/cookie": "^10.0.1",

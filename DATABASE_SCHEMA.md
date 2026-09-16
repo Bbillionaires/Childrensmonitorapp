@@ -65,6 +65,17 @@ Milestone 7 hook), ageMetadataRaw.
 (nullable — restrict to a subsection of a domain), blockExternalNavigation (bool, default
 true).
 
+### ContentSubmission
+Content is deduplicated globally by (providerId, providerRefId) — a second, unrelated
+parent submitting the same public video reuses the existing row rather than re-fetching the
+provider API. That means `Content` alone can't answer "what has this parent submitted"
+(`firstImportedByParentAccountId` only names whoever happened to import it first).
+`ContentSubmission` is the many-to-many record of every parent account's own submission
+queue, independent of who imported the underlying `Content` first — it's what "Pending
+Reviews" and "my submitted content" are actually queried against.
+- id, parentAccountId, contentId, submittedByUserId (nullable), createdAt
+- Unique on (parentAccountId, contentId).
+
 ### Playlist
 - id, providerId (nullable — a parent-created playlist has no provider), providerRefId
   (nullable — set if imported wholesale from e.g. a YouTube playlist URL), ownerParentAccountId,

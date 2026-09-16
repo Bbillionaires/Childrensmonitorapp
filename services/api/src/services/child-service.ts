@@ -1,13 +1,9 @@
 import { prisma } from "@app/database";
 import type { ChildCreateRequest, ChildProfile, ChildUpdateRequest } from "@app/types";
 import { writeAuditLog } from "./audit.js";
+import { NotFoundError } from "../lib/errors.js";
 
-export class NotFoundError extends Error {
-  constructor(message = "Not found") {
-    super(message);
-    this.name = "NotFoundError";
-  }
-}
+export { NotFoundError };
 
 function toChildProfile(child: {
   id: string;
