@@ -3,6 +3,7 @@ import type { ApprovalDecisionValue, BulkApprovalResultItem, ChildContentReviewI
 import { NotFoundError } from "../lib/errors.js";
 import { writeAuditLog } from "./audit.js";
 import { toContentSummary } from "./content-service.js";
+import { attachSupervisionScores } from "./scoring-service.js";
 
 async function assertOwnedChild(parentAccountId: string, childId: string): Promise<void> {
   const child = await prisma.child.findFirst({ where: { id: childId, parentAccountId } });
@@ -44,6 +45,11 @@ export async function getChildContentQueue(
       decidedAt: approval?.decidedAt.toISOString() ?? null,
       notes: approval?.notes ?? null,
     };
+  });
+
+  const scoredContent = await attachSupervisionScores(items.map((item) => item.content));
+  items.forEach((item, index) => {
+    item.content = scoredContent[index]!;
   });
 
   if (filter === "ALL") return items;

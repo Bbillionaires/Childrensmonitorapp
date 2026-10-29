@@ -3,6 +3,7 @@ import type { Env } from "@app/config";
 import type { PlaylistSummary } from "@app/types";
 import { getProviderRegistry } from "./provider-registry.js";
 import { recordContentSubmission, toContentSummary, upsertVideoContent } from "./content-service.js";
+import { ensureContentScored } from "./scoring-service.js";
 import { writeAuditLog } from "./audit.js";
 
 export class PlaylistImportError extends Error {}
@@ -68,6 +69,7 @@ export async function importPlaylist(
   for (let index = 0; index < items.length; index += 1) {
     const content = await upsertVideoContent(items[index]!, parentAccountId);
     await recordContentSubmission(parentAccountId, actorUserId, content, content.sourceUrl);
+    await ensureContentScored(content.id);
     const item = await prisma.playlistItem.create({
       data: { playlistId: playlist.id, contentId: content.id, position: index },
     });

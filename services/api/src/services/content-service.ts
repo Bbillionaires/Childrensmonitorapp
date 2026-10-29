@@ -4,36 +4,8 @@ import type { Env } from "@app/config";
 import type { ProviderVideoMetadata } from "@app/content-providers";
 import { getProviderRegistry } from "./provider-registry.js";
 import { writeAuditLog } from "./audit.js";
-
-interface ContentRow {
-  id: string;
-  providerId: string;
-  contentType: string;
-  sourceUrl: string;
-  title: string;
-  description: string | null;
-  thumbnailUrl: string | null;
-  durationSeconds: number | null;
-  creatorName: string | null;
-  providerMadeForKids: boolean | null;
-  createdAt: Date;
-}
-
-function toContentSummary(content: ContentRow): ContentSummary {
-  return {
-    id: content.id,
-    providerId: content.providerId,
-    contentType: content.contentType as ContentSummary["contentType"],
-    sourceUrl: content.sourceUrl,
-    title: content.title,
-    description: content.description,
-    thumbnailUrl: content.thumbnailUrl,
-    durationSeconds: content.durationSeconds,
-    creatorName: content.creatorName,
-    providerMadeForKids: content.providerMadeForKids,
-    createdAt: content.createdAt.toISOString(),
-  };
-}
+import { toContentSummary, type ContentRow } from "./content-mapper.js";
+import { ensureContentScored } from "./scoring-service.js";
 
 /**
  * Upserts a Content+Video row from provider metadata. Shared by single-URL submission and
@@ -144,6 +116,7 @@ export async function submitContentUrl(
     : await upsertWebsiteContent(rawUrl, parentAccountId);
 
   await recordContentSubmission(parentAccountId, actorUserId, content, rawUrl);
+  await ensureContentScored(content.id);
 
   return toContentSummary(content);
 }

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { supervisionScoreSummarySchema } from "./supervision-score.js";
 
 export const contentSubmitRequestSchema = z.object({
   url: z.string().url().refine((value) => value.startsWith("https://"), {
@@ -22,6 +23,10 @@ export const contentSummarySchema = z.object({
   creatorName: z.string().nullable(),
   providerMadeForKids: z.boolean().nullable(),
   createdAt: z.string(),
+  // Null until packages/supervision-score has scored this content (should be rare/transient —
+  // see services/api/src/services/scoring-service.ts, which scores on creation) or for
+  // content a given list doesn't bother enriching (see that file's callers).
+  supervisionScore: supervisionScoreSummarySchema.nullable(),
 });
 export type ContentSummary = z.infer<typeof contentSummarySchema>;
 
@@ -43,3 +48,10 @@ export const childContentReviewItemSchema = z.object({
   notes: z.string().nullable(),
 });
 export type ChildContentReviewItem = z.infer<typeof childContentReviewItemSchema>;
+
+/** One row of the parent-facing Supervision Scores page — content plus who it's approved for. */
+export const approvedContentScoreItemSchema = z.object({
+  content: contentSummarySchema,
+  approvedForChildren: z.array(z.object({ id: z.string(), firstName: z.string() })),
+});
+export type ApprovedContentScoreItem = z.infer<typeof approvedContentScoreItemSchema>;

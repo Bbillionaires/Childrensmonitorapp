@@ -80,14 +80,17 @@ including what the credential is for, where to obtain it, and which environment 
 
 ## Status
 
-Milestones 1–4 are implemented: monorepo scaffold, full domain database schema, parent
+Milestones 1–5 are implemented: monorepo scaffold, full domain database schema, parent
 authentication, parent dashboard, child profile management, URL and playlist import (a real
 YouTube adapter plus a website-whitelist fallback — no scraping anywhere), the parent
 approval pipeline (bulk select/approve/reject), the child-facing experience (device-handoff
-sessions, a closed library, controlled playback), and AI-assisted discovery (a natural-
-language brief → a structured query → a real YouTube search → candidates a parent reviews and
-approves — never auto-visible to a child). Discovery runs on a dual-provider setup: OpenAI as
-the cost-efficient primary translator (this feature is funded by one shared, operator-paid
-key, not bring-your-own-key, so cost per call matters), with Claude as a fallback for calls
-OpenAI's provider fails on. YouTube search and both AI providers are verified against their
-live APIs. See [IMPLEMENTATION_PLAN.md](./IMPLEMENTATION_PLAN.md) for what's next.
+sessions, a closed library, controlled playback), AI-assisted discovery (a natural-language
+brief → a structured query → a real YouTube search → candidates a parent reviews and approves
+— never auto-visible to a child), and the Supervision Score engine (a transparent, rule-based
+0–1000 safety rating computed automatically for every piece of content, with a full
+category-by-category "Why this score?" breakdown). Discovery runs on a dual-provider setup:
+OpenAI as the cost-efficient primary translator (this feature is funded by one shared,
+operator-paid key, not bring-your-own-key, so cost per call matters), with Claude as a
+fallback for calls OpenAI's provider fails on. YouTube search, both AI providers, and the
+Supervision Score engine are all verified end-to-end against live APIs in a real browser
+session. See [IMPLEMENTATION_PLAN.md](./IMPLEMENTATION_PLAN.md) for what's next.

@@ -4,6 +4,7 @@ import { createDiscoveryTranslator } from "@app/ai";
 import type { DiscoveryCandidate, DiscoverySavedSearch, DiscoverySearchResponse } from "@app/types";
 import { getProviderRegistry } from "./provider-registry.js";
 import { upsertVideoContent, toContentSummary, recordContentSubmission } from "./content-service.js";
+import { attachSupervisionScores, ensureContentScored } from "./scoring-service.js";
 import { decideApproval } from "./approval-service.js";
 import { writeAuditLog } from "./audit.js";
 import { NotFoundError } from "../lib/errors.js";
@@ -84,6 +85,7 @@ export async function runDiscoverySearch(
   for (let rank = 0; rank < candidates.length; rank += 1) {
     const content = await upsertVideoContent(candidates[rank]!, parentAccountId);
     await recordContentSubmission(parentAccountId, actorUserId, content, content.sourceUrl);
+    await ensureContentScored(content.id);
     // Honest about how matching works: candidates come from YouTube's own relevance ranking
     // for the derived search terms, not a per-video explanation Claude invented — see
     // IMPLEMENTATION_PLAN.md.
@@ -97,6 +99,11 @@ export async function runDiscoverySearch(
       matchReason,
     });
   }
+
+  const scoredContent = await attachSupervisionScores(candidateResults.map((c) => c.content));
+  candidateResults.forEach((candidate, index) => {
+    candidate.content = scoredContent[index]!;
+  });
 
   return {
     searchRequestId: searchRequest.id,

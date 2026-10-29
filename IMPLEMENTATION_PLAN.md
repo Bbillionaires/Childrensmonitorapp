@@ -283,7 +283,66 @@ duration limit in seconds, all extracted without being explicitly told the field
 `ANTHROPIC_API_KEY` is optional (fallback only) — `OPENAI_API_KEY` is the credential required
 for discovery to function day-to-day.
 
-## Milestones 5–10
+## Milestone 5 — exact implementation plan (done)
+
+1. `packages/supervision-score`: a real `RuleBasedSupervisionScorer` (`modelVersion:
+   "rule-based-v1"`) — the first implementation of the `SupervisionScorer` interface
+   scaffolded in Milestone 1. Metadata-only: title/description keyword matching against a
+   term list per category (`category-terms.ts`), plus `providerMadeForKids` as one input
+   affecting only the `age_appropriateness` category (never adopted as the score itself, per
+   SUPERVISION_SCORE.md). Every category starts at a low-confidence neutral baseline (100/100,
+   confidence 0.2) and is only marked down — with confidence raised accordingly — when a
+   specific signal is found; it never claims certainty a title and description alone can't
+   support. `riskBandForScore` maps the 0–1000 overall score to the LOW/MODERATE/ELEVATED/HIGH
+   bands from SUPERVISION_SCORE.md's "Display" section. 14 unit tests.
+2. `packages/types`: `supervisionScoreSummarySchema` (model version, overall score,
+   confidence, risk band, explanation, per-category breakdown) and
+   `approvedContentScoreItemSchema`. `ContentSummary` gained a `supervisionScore` field
+   (nullable — null until scored, which should be rare/transient since scoring happens
+   synchronously at content-creation time).
+3. `services/api/src/services/scoring-service.ts`: `ensureContentScored(contentId)` persists
+   the first (and, for now, only — nothing yet triggers a re-score) `ScoreVersion` +
+   `ScoreCategoryResult` rows and points `SupervisionScore.currentScoreVersionId` at it, inside
+   a transaction, append-only per SUPERVISION_SCORE.md's versioning rules. Called once, right
+   after every content-creation path (`content-service.submitContentUrl`,
+   `playlist-service.importPlaylist`, `discovery-service.runDiscoverySearch`) — `Content` is
+   shared globally across families (see its doc comment), so a piece of content is scored
+   once, not once per parent who happens to submit it. `attachSupervisionScores` batch-enriches
+   a list of `ContentSummary` with their current score in one query each; wired into
+   `approval-service.getChildContentQueue` (powers Pending Reviews/Approved Content),
+   `discovery-service` candidates, and the new Scores route.
+4. `services/api`: `GET /api/parents/scores` (`listApprovedContentWithScores`) — every piece
+   of content approved for at least one of a parent's children, each annotated with which
+   children it's approved for and its full score breakdown. Read-only: scores are produced at
+   creation time, not computed on request.
+5. `apps/web`: a `SupervisionScoreBadge` component (risk-band-colored pill + expandable "Why
+   this score?" category breakdown, wired into the shared `ContentCard` so it shows up
+   wherever a parent reviews content — Pending Reviews, Approved Content, Discover Content —
+   not just its own page) and a real Supervision Scores page (worst-score-first, "Approved
+   for: <children>" under each card), replacing the Milestone 1 placeholder. Fixed
+   `dashboard-nav.ts`'s stale `"soon"` badges on sections that Milestones 2–4 had already
+   shipped (Approved Content, Pending Reviews, Playlists, Discover Content).
+6. Tests: 4 new API integration tests (auto-scoring on submission, idempotency — a
+   re-submission never creates a second `ScoreVersion`, a keyword match propagating end-to-end
+   through `ensureContentScored`, and the `/scores` route's parent/parent isolation) plus the
+   14 scorer unit tests above.
+
+**Status: done**, verified end-to-end in a real browser session against the live OpenAI +
+YouTube APIs: a Discover Content search for dinosaur videos returned real candidates each
+carrying a real computed Supervision Score badge (e.g. 984/1000 — Low risk, with "Age
+appropriateness: 70/100 (50% conf.) — Platform does not flag this content as made for kids"
+correctly the lowest-scoring category and the only one with raised confidence); approving them
+and visiting the new Supervision Scores page showed every one, worst-first, each correctly
+annotated with which child it was approved for; expanding "Why this score?" showed the full
+20-category breakdown with `modelVersion: rule-based-v1` and the overall confidence. See
+"Future analysis inputs" in SUPERVISION_SCORE.md for what later milestones add (transcript,
+frame sampling, OCR) without changing this shape — `ScoringInput`'s optional fields already
+exist for exactly that, and `RuleBasedSupervisionScorer` already uses them (keyword-matches
+against `transcript`/`ocrText` too, and scores `external_link_risk` from
+`externalLinksFound`) whenever a future producer starts populating them, with no interface
+change needed.
+
+## Milestones 6–10
 
 Unchanged from PRODUCT_REQUIREMENTS.md's list; each will get this same treatment (a short
 plan reviewed before implementation, external-credential stop points called out explicitly)

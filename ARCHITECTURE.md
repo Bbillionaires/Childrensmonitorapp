@@ -123,11 +123,30 @@ interface SupervisionScorer {
 
 `ScoringInput` carries whatever signals are available for a piece of content (metadata,
 provider "made for kids" flag, transcript if fetched, etc.) `SupervisionScoreResult` carries
-the overall 0–1000 score, a per-category breakdown, confidence, and an explanation. The MVP
-implementation (Milestone 5) is a transparent, rule-based scorer over metadata signals only;
-frame/transcript/audio analysis are added later as additional `ScoringInput` producers behind
-the same interface — the storage/versioning model (`ScoreVersion`) does not change when the
-underlying model does.
+the overall 0–1000 score, a per-category breakdown, confidence, and an explanation.
+
+Milestone 5 implements this with `RuleBasedSupervisionScorer` (`modelVersion:
+"rule-based-v1"`) — transparent, metadata-only: title/description keyword matching per
+category plus `providerMadeForKids` as one input affecting only `age_appropriateness` (never
+adopted as the score itself). Every category starts at a low-confidence neutral baseline and
+is only marked down, with confidence raised accordingly, when a specific signal is found —
+never claiming certainty a title and description alone can't support. It already reads
+`ScoringInput`'s later-milestone fields (`transcript`, `ocrText`, `externalLinksFound`)
+whenever they happen to be populated, so frame/transcript/audio analysis (Milestone 7) plugs
+in as additional `ScoringInput` producers with no scorer or storage change.
+
+`services/api/src/services/scoring-service.ts` is the only caller: `ensureContentScored`
+scores a piece of content once, synchronously, right after it's first created (single-URL
+submission, playlist import, or AI discovery) — `Content` is shared globally across every
+family, so this is a property of the content, not of any one parent's relationship to it — and
+persists the result as the content's first `ScoreVersion` (append-only; nothing yet triggers a
+re-score of already-scored content). `attachSupervisionScores` batch-enriches a list of
+`ContentSummary` with their current score in one query, used wherever a parent reviews content
+(Pending Reviews, Approved Content, Discover Content results) plus the dedicated
+`GET /api/parents/scores` route behind the Supervision Scores dashboard page — every piece of
+content approved for at least one child, worst-score-first, with a "Why this score?" expand
+showing the full category breakdown. The storage/versioning model (`ScoreVersion`) does not
+change when the underlying model does — only `signalsUsed` grows.
 
 ## AI discovery
 

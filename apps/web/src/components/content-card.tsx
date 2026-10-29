@@ -1,4 +1,5 @@
 import type { ContentSummary } from "@app/types";
+import { SupervisionScoreBadge } from "./supervision-score-badge";
 
 function formatDuration(seconds: number | null): string | null {
   if (seconds === null) return null;
@@ -31,6 +32,7 @@ export function ContentCard({ content, actions }: { content: ContentSummary; act
         {content.description && (
           <p className="mt-1 line-clamp-2 text-xs text-slate-500">{content.description}</p>
         )}
+        {content.supervisionScore && <SupervisionScoreBadge score={content.supervisionScore} />}
         {actions && <div className="mt-3 flex gap-2">{actions}</div>}
       </div>
     </div>
