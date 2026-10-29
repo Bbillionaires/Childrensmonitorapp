@@ -1,12 +1,17 @@
 import type { FastifyInstance } from "fastify";
 import { ContentProviderNotConfiguredError } from "@app/content-providers";
-import { approvalRequestSchema, contentSubmitRequestSchema } from "@app/types";
+import { approvalRequestSchema, bulkApprovalRequestSchema, contentSubmitRequestSchema } from "@app/types";
 import type { ParentSessionClaims } from "@app/types";
 import type { Env } from "@app/config";
 import { parseOrReject } from "../lib/validate.js";
 import { NotFoundError } from "../lib/errors.js";
 import { listSubmittedContent, submitContentUrl } from "../services/content-service.js";
-import { decideApproval, getChildContentQueue, type QueueFilter } from "../services/approval-service.js";
+import {
+  bulkDecideApproval,
+  decideApproval,
+  getChildContentQueue,
+  type QueueFilter,
+} from "../services/approval-service.js";
 
 const QUEUE_FILTERS: QueueFilter[] = ["PENDING", "APPROVED", "REJECTED", "ALL"];
 
@@ -79,6 +84,31 @@ export default async function contentRoutes(fastify: FastifyInstance, opts: { en
           body.notes,
         );
         return reply.send({ ok: true });
+      } catch (error) {
+        if (error instanceof NotFoundError) return reply.code(404).send({ error: error.message });
+        throw error;
+      }
+    },
+  );
+
+  fastify.post<{ Params: { childId: string } }>(
+    "/children/:childId/decisions/bulk",
+    { preHandler: fastify.requireCsrfHeader },
+    async (request, reply) => {
+      const claims = request.sessionClaims as ParentSessionClaims;
+      const body = parseOrReject(bulkApprovalRequestSchema, request.body, reply);
+      if (!body) return;
+
+      try {
+        const results = await bulkDecideApproval(
+          claims.parentAccountId,
+          claims.userId,
+          request.params.childId,
+          body.contentIds,
+          body.decision,
+          body.notes,
+        );
+        return reply.send({ results });
       } catch (error) {
         if (error instanceof NotFoundError) return reply.code(404).send({ error: error.message });
         throw error;

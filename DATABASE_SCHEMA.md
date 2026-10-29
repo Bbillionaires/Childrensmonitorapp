@@ -80,6 +80,9 @@ Reviews" and "my submitted content" are actually queried against.
 - id, providerId (nullable — a parent-created playlist has no provider), providerRefId
   (nullable — set if imported wholesale from e.g. a YouTube playlist URL), ownerParentAccountId,
   title, description, createdAt, updatedAt
+- Unique on (ownerParentAccountId, providerId, providerRefId) — unlike `Content`, a playlist
+  is never shared across families: each parent's import of "the same" source playlist gets
+  its own row, re-imported in place rather than duplicated.
 
 ### PlaylistItem
 - id, playlistId (→ Playlist), contentId (→ Content), position (int), addedAt

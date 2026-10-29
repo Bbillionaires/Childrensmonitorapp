@@ -80,10 +80,14 @@ including what the credential is for, where to obtain it, and which environment 
 
 ## Status
 
-Milestones 1 and 2 are implemented: monorepo scaffold, full domain database schema, parent
-authentication (email/password + PIN + MFA-ready), parent dashboard shell, child profile
-management, URL submission (a real YouTube adapter plus a website-whitelist fallback — no
-scraping either way), and the parent approval pipeline that's the only thing able to make
-content visible to a child. The YouTube adapter has been verified against the live YouTube
-Data API v3 end-to-end. See [IMPLEMENTATION_PLAN.md](./IMPLEMENTATION_PLAN.md) for what's
-next.
+Milestones 1–3 are implemented: monorepo scaffold, full domain database schema, parent
+authentication, parent dashboard, child profile management, URL and playlist import (a real
+YouTube adapter plus a website-whitelist fallback — no scraping either way), the parent
+approval pipeline (including bulk select/approve/reject), and the actual child-facing
+experience — a device-handoff session model, a closed library showing only approved content,
+and controlled playback (Next Approved Video/Replay/Back to Library, no arbitrary
+recommendations). All of it verified end-to-end against the live YouTube Data API v3, a live
+local Postgres, and real browser sessions — including two real bugs (a playlist-URL
+recognition gap and a refresh-token-revocation gap on device handoff) that were caught by
+tests before they reached anyone. See [IMPLEMENTATION_PLAN.md](./IMPLEMENTATION_PLAN.md) for
+what's next.

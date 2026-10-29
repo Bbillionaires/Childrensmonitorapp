@@ -33,7 +33,7 @@ export interface IssuedSession {
   parentAccountId: string;
 }
 
-async function issueSessionForUser(env: Env, userId: string, deviceLabel: string): Promise<IssuedSession> {
+export async function issueSessionForUser(env: Env, userId: string, deviceLabel: string): Promise<IssuedSession> {
   const user = await prisma.user.findUnique({
     where: { id: userId },
     include: { parentAccount: true },

@@ -71,6 +71,11 @@ describe("YouTubeContentProvider", () => {
     expect(provider.canHandle("https://vimeo.com/12345")).toBe(false);
   });
 
+  it("canHandle also recognizes a pure playlist URL (no v= param), not just video URLs", () => {
+    const provider = new YouTubeContentProvider(undefined);
+    expect(provider.canHandle("https://www.youtube.com/playlist?list=PL123abc")).toBe(true);
+  });
+
   it("throws ContentProviderNotConfiguredError instead of fabricating metadata when no key is set", async () => {
     const provider = new YouTubeContentProvider(undefined);
     await expect(provider.fetchVideoMetadata("https://youtu.be/dQw4w9WgXcQ")).rejects.toThrow(
@@ -180,5 +185,45 @@ describe("YouTubeContentProvider", () => {
     expect(embed.embedUrl).toContain("youtube-nocookie.com/embed/dQw4w9WgXcQ");
     expect(embed.embedUrl).toContain("rel=0");
     expect(embed.disableRelatedContent).toBe(true);
+  });
+
+  it("fetchPlaylistMetadata maps the documented playlists.list response shape", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          items: [{ snippet: { title: "Dinosaurs for Kids", description: "Educational fun" } }],
+        }),
+      }),
+    );
+    const provider = new YouTubeContentProvider("test-api-key");
+    const metadata = await provider.fetchPlaylistMetadata(
+      "https://www.youtube.com/playlist?list=PL123abc",
+    );
+    expect(metadata).toEqual({ title: "Dinosaurs for Kids", description: "Educational fun" });
+  });
+
+  it("fetchPlaylistMetadata throws when the playlist is not found", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => ({ items: [] }) }));
+    const provider = new YouTubeContentProvider("test-api-key");
+    await expect(
+      provider.fetchPlaylistMetadata("https://www.youtube.com/playlist?list=PL123abc"),
+    ).rejects.toThrow(/not found|unavailable/i);
+  });
+
+  it("fetchPlaylistMetadata throws ContentProviderNotConfiguredError without a key", async () => {
+    const provider = new YouTubeContentProvider(undefined);
+    await expect(
+      provider.fetchPlaylistMetadata("https://www.youtube.com/playlist?list=PL123abc"),
+    ).rejects.toThrow(ContentProviderNotConfiguredError);
+  });
+
+  it("extractPlaylistRefId works without an API key and returns null for a non-playlist URL", () => {
+    const provider = new YouTubeContentProvider(undefined);
+    expect(provider.extractPlaylistRefId("https://www.youtube.com/playlist?list=PL123abc")).toBe(
+      "PL123abc",
+    );
+    expect(provider.extractPlaylistRefId("https://www.youtube.com/watch?v=dQw4w9WgXcQ")).toBeNull();
   });
 });

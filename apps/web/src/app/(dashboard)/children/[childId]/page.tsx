@@ -47,6 +47,13 @@ export default function ChildDetailPage() {
     router.push("/children");
   }
 
+  async function handleOpenAsChild() {
+    await apiFetch(`/api/parents/children/${params.childId}/device-session`, { method: "POST" });
+    // This overwrites the browser's session cookie with a child-scoped one — the parent
+    // dashboard becomes unreachable from here until a parent signs back in from /child.
+    window.location.href = "/child";
+  }
+
   if (notFound) {
     return <p className="alert-error">This child profile doesn&apos;t exist or isn&apos;t yours to view.</p>;
   }
@@ -64,6 +71,17 @@ export default function ChildDetailPage() {
 
       <div className="card">
         <ChildForm initialValues={toFormValues(child)} submitLabel="Save changes" onSubmit={handleUpdate} />
+      </div>
+
+      <div className="card">
+        <h2 className="text-sm font-semibold text-slate-900">Hand this device to {child.firstName}</h2>
+        <p className="mt-1 text-sm text-slate-500">
+          Switches this browser into {child.firstName}&apos;s view — only their approved library,
+          nothing else. Your dashboard session ends until you sign back in with your PIN or password.
+        </p>
+        <button onClick={() => void handleOpenAsChild()} className="btn-primary mt-3">
+          Open as {child.firstName}
+        </button>
       </div>
 
       <div className="card border-red-100">

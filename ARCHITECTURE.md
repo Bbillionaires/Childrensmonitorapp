@@ -70,16 +70,29 @@ Two disjoint session types, never interchangeable:
 
 - **Parent session** (JWT, short-lived access token + rotating refresh token, `role: PARENT`,
   `parentAccountId` claim). Required for every `/api/parents/*` route.
-- **Child session** (JWT, `role: CHILD`, `childId` + `parentAccountId` claims, issued only by
-  a parent action — e.g. "hand device to child" — or a device-bound child login PIN a parent
-  configured). Required for every `/api/child/*` route, and scoped to exactly one `childId`;
-  a child token for child A is rejected by every endpoint that resolves data for child B.
+- **Child session** (JWT, `role: CHILD`, `childId` + `parentAccountId` claims, longer-lived
+  since a child has no way to silently refresh one — issued only by a parent action: "hand
+  this device to this child," `POST /api/parents/children/:childId/device-session`). Required
+  for every `/api/child/*` route, and scoped to exactly one `childId`; a child token for
+  child A is rejected by every endpoint that resolves data for child B.
 
 A single Fastify `preHandler` guard (`packages/auth`) decodes the token, checks its role
 against the route's declared required role, and — for child routes — checks the token's
 `childId` against the resource being requested, on every request. This is what the
 "child cannot access another child's content" and "child cannot reach parent settings"
 tests in `services/api` verify directly against the HTTP layer, not just the UI.
+
+Parent and child sessions share the same cookie names (`access_token`/`csrf_token`), by
+design: starting a child session overwrites whatever parent session cookie was there, so a
+browser holds exactly one live session at a time, matching the "hand off the device" mental
+model literally. Critically, starting a child session also **revokes the parent's refresh
+token server-side** (not just clearing its cookie) — an httpOnly cookie is still visible to
+anyone with devtools access to the physical device, so clearing it client-side alone would
+leave a captured token replayable against `/api/auth/refresh` to mint a fresh parent session
+after handoff. "Parent PIN sign-in" (`POST /api/child/exit-to-parent`) reverses the handoff:
+it requires an active child session to even attempt, verifies the parent's PIN, and — on
+success — issues a complete fresh parent session (access + refresh + CSRF), the same as a
+normal login.
 
 ## Content provider adapters
 

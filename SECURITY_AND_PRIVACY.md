@@ -105,8 +105,17 @@ review.
 
 - Parent sessions are per-device (`Device` row), independently revocable ("log out this
   device" without logging out others).
-- Child sessions are short-lived and re-issued by the parent's own device handoff rather than
-  a long-lived standing credential, reducing the blast radius of a compromised child device.
+- Child sessions are longer-lived than a parent's (a child has no way to silently refresh
+  one) but still bounded, and are only ever created by an explicit parent "hand off this
+  device" action — never a standing credential a child logs into independently.
+- Handing off a device **revokes the parent's refresh token server-side**, not just the
+  cookie. Clearing a cookie is a client-side instruction the browser can choose to honor; the
+  cookie's raw value is still visible to anyone with devtools/physical access to the device
+  (httpOnly only blocks `document.cookie` JS access, not a human looking in devtools), so a
+  captured value must be made unusable at the database, not just removed from view.
+- "Parent PIN sign-in" from child mode requires an active child session to even attempt (it's
+  a route under `/api/child/*`), so the PIN can't be probed without first holding a
+  legitimate child-mode browser session.
 
 ## Public API surface
 

@@ -44,3 +44,35 @@ export function clearSessionCookies(reply: FastifyReply): void {
   reply.clearCookie("refresh_token", { path: "/api/auth" });
   reply.clearCookie("csrf_token", { path: "/" });
 }
+
+/**
+ * A child device-handoff session reuses the same `access_token`/`csrf_token` cookie names
+ * as a parent session (disambiguated by the JWT's own `role` claim — see plugins/auth.ts),
+ * so simply setting these overwrites whatever parent session cookie was there. There is no
+ * child refresh token: a child has no way to silently refresh one anyway, so the session is
+ * just longer-lived (see packages/auth's `expiresInSeconds`).
+ *
+ * Critically, this also clears any lingering parent `refresh_token` — otherwise a child
+ * could call /api/auth/refresh themselves and mint a fresh *parent* access token, defeating
+ * the entire point of handing off the device.
+ */
+export function setChildSessionCookies(
+  reply: FastifyReply,
+  params: { accessToken: string; expiresInSeconds: number },
+): void {
+  reply.setCookie("access_token", params.accessToken, {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: isProduction(),
+    path: "/",
+    maxAge: params.expiresInSeconds,
+  });
+  reply.setCookie("csrf_token", generateOpaqueToken(), {
+    httpOnly: false,
+    sameSite: "lax",
+    secure: isProduction(),
+    path: "/",
+    maxAge: params.expiresInSeconds,
+  });
+  reply.clearCookie("refresh_token", { path: "/api/auth" });
+}

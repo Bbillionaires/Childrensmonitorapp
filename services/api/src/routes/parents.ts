@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { prisma } from "@app/database";
 import { childCreateRequestSchema, childUpdateRequestSchema, setPinRequestSchema } from "@app/types";
 import type { ParentSessionClaims } from "@app/types";
+import type { Env } from "@app/config";
 import { parseOrReject } from "../lib/validate.js";
 import { AuthError, setParentPin } from "../services/auth-service.js";
 import {
@@ -12,6 +13,8 @@ import {
   listChildren,
   updateChild,
 } from "../services/child-service.js";
+import { startChildDeviceSession } from "../services/child-session-service.js";
+import { setChildSessionCookies } from "../services/session-cookies.js";
 
 /**
  * Every route here requires `requireParentSession` (registered by the caller) plus, for
@@ -20,7 +23,9 @@ import {
  * another parent's child, which is exactly the boundary the security tests in
  * services/api/src/test verify.
  */
-export default async function parentRoutes(fastify: FastifyInstance) {
+export default async function parentRoutes(fastify: FastifyInstance, opts: { env: Env }) {
+  const { env } = opts;
+
   fastify.get("/me", async (request, reply) => {
     const claims = request.sessionClaims as ParentSessionClaims;
     const user = await prisma.user.findUnique({
@@ -116,6 +121,32 @@ export default async function parentRoutes(fastify: FastifyInstance) {
       try {
         await archiveChild(claims.parentAccountId, claims.userId, request.params.childId);
         return reply.code(204).send();
+      } catch (error) {
+        if (error instanceof NotFoundError) return reply.code(404).send({ error: error.message });
+        throw error;
+      }
+    },
+  );
+
+  /**
+   * "Hand the device to this child." Issues a CHILD-role session and overwrites this
+   * browser's session cookies with it — the parent's own session ends here, it doesn't stay
+   * live alongside the child's (see session-cookies.ts#setChildSessionCookies).
+   */
+  fastify.post<{ Params: { childId: string } }>(
+    "/children/:childId/device-session",
+    { preHandler: fastify.requireCsrfHeader },
+    async (request, reply) => {
+      const claims = request.sessionClaims as ParentSessionClaims;
+      try {
+        const session = await startChildDeviceSession(
+          env,
+          claims.parentAccountId,
+          claims.userId,
+          request.params.childId,
+        );
+        setChildSessionCookies(reply, session);
+        return reply.send({ ok: true });
       } catch (error) {
         if (error instanceof NotFoundError) return reply.code(404).send({ error: error.message });
         throw error;

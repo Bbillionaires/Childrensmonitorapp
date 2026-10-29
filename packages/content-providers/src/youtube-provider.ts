@@ -1,4 +1,4 @@
-import type { ContentProvider, EmbedInfo, ProviderVideoMetadata } from "./types.js";
+import type { ContentProvider, EmbedInfo, ProviderPlaylistMetadata, ProviderVideoMetadata } from "./types.js";
 
 const YOUTUBE_HOSTS = new Set([
   "youtube.com",
@@ -130,7 +130,10 @@ export class YouTubeContentProvider implements ContentProvider {
   constructor(private readonly apiKey: string | undefined) {}
 
   canHandle(url: string): boolean {
-    return extractYouTubeVideoId(url) !== null;
+    // Must recognize playlist URLs too, not just video URLs — otherwise the registry never
+    // finds this adapter for a pure `/playlist?list=...` link and playlist import silently
+    // falls through as "unsupported," per the registry's resolve() in registry.ts.
+    return extractYouTubeVideoId(url) !== null || extractYouTubePlaylistId(url) !== null;
   }
 
   async fetchVideoMetadata(url: string): Promise<ProviderVideoMetadata> {
@@ -180,6 +183,31 @@ export class YouTubeContentProvider implements ContentProvider {
     return this.fetchVideosByIds(videoIds);
   }
 
+  async fetchPlaylistMetadata(url: string): Promise<ProviderPlaylistMetadata> {
+    const playlistId = extractYouTubePlaylistId(url);
+    if (!playlistId) {
+      throw new Error("Not a recognizable YouTube playlist URL");
+    }
+    this.requireApiKey();
+
+    const params = new URLSearchParams({ part: "snippet", id: playlistId, key: this.apiKey! });
+    const response = await fetch(`${API_BASE}/playlists?${params.toString()}`);
+    if (!response.ok) {
+      throw new Error(`YouTube API error fetching playlist metadata: ${response.status}`);
+    }
+    const data = (await response.json()) as {
+      items?: Array<{ snippet?: { title?: string; description?: string } }>;
+    };
+    const item = data.items?.[0];
+    if (!item) {
+      throw new Error("This playlist was not found, or is private/unavailable");
+    }
+    return {
+      title: item.snippet?.title ?? "Imported playlist",
+      description: item.snippet?.description ?? null,
+    };
+  }
+
   getEmbedInfo(providerRefId: string): EmbedInfo {
     return {
       // youtube-nocookie.com is YouTube's own privacy-enhanced embed domain; rel=0 restricts
@@ -189,6 +217,10 @@ export class YouTubeContentProvider implements ContentProvider {
       embedUrl: `https://www.youtube-nocookie.com/embed/${providerRefId}?rel=0&modestbranding=1`,
       disableRelatedContent: true,
     };
+  }
+
+  extractPlaylistRefId(url: string): string | null {
+    return extractYouTubePlaylistId(url);
   }
 
   private requireApiKey(): void {

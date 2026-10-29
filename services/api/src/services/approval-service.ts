@@ -1,5 +1,5 @@
 import { prisma } from "@app/database";
-import type { ApprovalDecisionValue, ChildContentReviewItem } from "@app/types";
+import type { ApprovalDecisionValue, BulkApprovalResultItem, ChildContentReviewItem } from "@app/types";
 import { NotFoundError } from "../lib/errors.js";
 import { writeAuditLog } from "./audit.js";
 import { toContentSummary } from "./content-service.js";
@@ -108,4 +108,36 @@ export async function decideApproval(
     targetId: contentId,
     metadata: { childId, notes: notes ?? null },
   });
+}
+
+/**
+ * Powers the playlist-import "Select All / Approve Selected / Reject Selected" UI from
+ * PRODUCT_REQUIREMENTS.md. Best-effort per item rather than all-or-nothing: if one of 40
+ * selected videos was somehow removed from the queue between page load and submit, the
+ * other 39 still go through — the caller surfaces which (if any) failed.
+ */
+export async function bulkDecideApproval(
+  parentAccountId: string,
+  actorUserId: string,
+  childId: string,
+  contentIds: string[],
+  decision: ApprovalDecisionValue,
+  notes: string | undefined,
+): Promise<BulkApprovalResultItem[]> {
+  await assertOwnedChild(parentAccountId, childId);
+
+  const results: BulkApprovalResultItem[] = [];
+  for (const contentId of contentIds) {
+    try {
+      await decideApproval(parentAccountId, actorUserId, childId, contentId, decision, notes);
+      results.push({ contentId, ok: true });
+    } catch (error) {
+      results.push({
+        contentId,
+        ok: false,
+        error: error instanceof Error ? error.message : "Unknown error",
+      });
+    }
+  }
+  return results;
 }

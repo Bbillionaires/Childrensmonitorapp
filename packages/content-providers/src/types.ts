@@ -29,6 +29,11 @@ export interface EmbedInfo {
   disableRelatedContent: boolean;
 }
 
+export interface ProviderPlaylistMetadata {
+  title: string;
+  description: string | null;
+}
+
 /**
  * Implemented once per content source. `services/api` is the only caller — a provider
  * adapter must never be imported by a client app, since only the API is allowed to hold
@@ -40,4 +45,13 @@ export interface ContentProvider {
   fetchVideoMetadata(url: string): Promise<ProviderVideoMetadata>;
   fetchPlaylistItems(url: string): Promise<ProviderVideoMetadata[]>;
   getEmbedInfo(providerRefId: string): EmbedInfo;
+  /** Optional — not every provider has a separate "playlist" concept (e.g. a website). */
+  fetchPlaylistMetadata?(url: string): Promise<ProviderPlaylistMetadata>;
+  /**
+   * Extracts the provider's own stable playlist identifier from a URL (e.g. YouTube's
+   * `list=` param), or null if the URL isn't a recognizable playlist URL. Used to dedupe a
+   * re-imported playlist to the same row rather than creating a duplicate — see
+   * DATABASE_SCHEMA.md's note on Playlist uniqueness.
+   */
+  extractPlaylistRefId?(url: string): string | null;
 }

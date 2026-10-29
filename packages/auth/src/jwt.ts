@@ -6,6 +6,12 @@ const ACCESS_TOKEN_TTL_SECONDS = 15 * 60; // 15 minutes — see SECURITY_AND_PRI
 export interface AccessTokenConfig {
   secret: string;
   issuer?: string;
+  /**
+   * Overrides the default 15-minute TTL. Used for child device-handoff sessions, which are
+   * deliberately longer-lived (a child has no way to silently refresh a token the way a
+   * parent's browser does) — see ARCHITECTURE.md's AuthN/AuthZ model.
+   */
+  expiresInSeconds?: number;
 }
 
 /**
@@ -15,7 +21,7 @@ export interface AccessTokenConfig {
  */
 export function signAccessToken(claims: SessionClaims, config: AccessTokenConfig): string {
   return jwt.sign(claims, config.secret, {
-    expiresIn: ACCESS_TOKEN_TTL_SECONDS,
+    expiresIn: config.expiresInSeconds ?? ACCESS_TOKEN_TTL_SECONDS,
     issuer: config.issuer ?? "childrensmonitorapp",
   });
 }

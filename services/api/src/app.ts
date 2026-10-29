@@ -7,6 +7,8 @@ import authPlugin from "./plugins/auth.js";
 import authRoutes from "./routes/auth.js";
 import parentRoutes from "./routes/parents.js";
 import contentRoutes from "./routes/content.js";
+import playlistRoutes from "./routes/playlists.js";
+import childRoutes from "./routes/child.js";
 import { createEmailSender } from "./services/email.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
@@ -34,10 +36,19 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(
     async (instance) => {
       instance.addHook("preHandler", instance.requireParentSession);
-      await parentRoutes(instance);
+      await parentRoutes(instance, { env });
       await contentRoutes(instance, { env });
+      await playlistRoutes(instance, { env });
     },
     { prefix: "/api/parents" },
+  );
+
+  await app.register(
+    async (instance) => {
+      instance.addHook("preHandler", instance.requireChildSession);
+      await childRoutes(instance, { env });
+    },
+    { prefix: "/api/child" },
   );
 
   return app;

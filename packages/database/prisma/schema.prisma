@@ -286,6 +286,10 @@ model Playlist {
 
   items PlaylistItem[]
 
+  // Scoped per-parent (unlike Content, which dedupes globally) — a playlist is each
+  // parent's own organizational object, so re-importing the same provider playlist
+  // refreshes *that parent's* Playlist row rather than ever being shared across families.
+  @@unique([ownerParentAccountId, providerId, providerRefId])
   @@index([ownerParentAccountId])
   @@map("playlists")
 }

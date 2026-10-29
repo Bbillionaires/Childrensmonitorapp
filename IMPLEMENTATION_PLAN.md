@@ -74,6 +74,17 @@ returned as if real.
 - "Made for Kids" and similar provider flags are metadata, not a guarantee, and some
   providers restrict COPPA-flagged content features (e.g. disable comments/personalization)
   in ways that can affect what our API is able to retrieve.
+- A website approved for a child plays back inside a sandboxed `<iframe>` (Milestone 3). This
+  genuinely restricts what that page's own JavaScript can do (no top-level navigation, no
+  popups) via the `sandbox` attribute, and the child always has our own "Back to Library"
+  chrome outside the iframe regardless of what's inside it — but it does **not** let us
+  inspect or block where the page itself navigates *within* the iframe (e.g. a link to
+  another page on an unrelated domain), since cross-origin iframe content is opaque to the
+  parent page by browser design. Reliable redirect-blocking per PRODUCT_REQUIREMENTS.md
+  requires a native controlled WebView with its own navigation-delegate API (Android
+  `WebViewClient`/iOS `WKNavigationDelegate`), which is a Milestone 8/9 native-app capability,
+  not something a web `<iframe>` can provide. Until then, "controlled" for websites means
+  "contained with an always-visible exit," not "navigation-proof."
 
 ## Major legal/privacy considerations
 
@@ -142,7 +153,52 @@ just the mocked unit tests covering the parsing/mapping logic against YouTube's 
 response shape. Website submission, the approval pipeline, and the UI were already verified
 against the live local Postgres and a real browser session.
 
-## Milestones 3–10
+## Milestone 3 — exact implementation plan (done)
+
+1. Schema: a per-parent uniqueness constraint on `Playlist` (`ownerParentAccountId`,
+   `providerId`, `providerRefId`) so re-importing a playlist refreshes that parent's own row
+   rather than creating a duplicate — unlike `Content`, a `Playlist` is never shared across
+   families.
+2. `packages/content-providers`: `fetchPlaylistMetadata` and `extractPlaylistRefId` added to
+   the YouTube adapter and the `ContentProvider` interface (both optional, since not every
+   provider has a "playlist" concept). Fixed a real bug this work surfaced: `canHandle()`
+   only recognized video URLs, so a bare `/playlist?list=...` link was never matched to any
+   adapter at all — playlist import silently failed as "unsupported" until this was caught by
+   the test in step 6 and fixed to also recognize playlist URLs.
+3. `services/api`: `importPlaylist` (fetches a playlist's current items through the owning
+   provider's official API, upserts each as `Content`, replaces the `Playlist`'s items so a
+   re-import reflects removals too) and `bulkDecideApproval` (best-effort per item, powering
+   "Select All / Approve Selected / Reject Selected"). A device-handoff session mechanism:
+   `startChildDeviceSession` mints a CHILD-role token that overwrites the browser's existing
+   session cookie, and — a second real bug this work caught — explicitly **revokes the
+   parent's refresh token server-side**, since merely clearing the cookie client-side left the
+   underlying token still valid in the database (replayable by anyone who'd captured it via
+   devtools before handoff). `exitToParentSession` reverses this via the parent's PIN.
+4. Child-facing routes under `/api/child/*` (profile, library, playlist detail, playback,
+   exit-to-parent), every one scoped to the session token's own `childId` — never a
+   client-supplied one. `getPlaybackInfo` re-checks the `ChildContentPermission` at the
+   moment of playback, not just when the library was listed, so a parent's revocation takes
+   effect immediately even mid-browsing-session.
+5. `apps/web`: a real Playlists page (import → checkbox selection → per-child bulk
+   approve/reject) and an entirely new `/child` experience — large-card home screen (grouped
+   by Playlists/Watch/Websites, not the product spec's more granular category taxonomy, which
+   needs content categorization not yet built), playlist browsing, a playback screen with
+   Replay/Next Approved Video (playlist-scoped only, never arbitrary)/Back to Library, and a
+   PIN-gated "Parent sign-in" to exit child mode.
+6. Tests: 22 API integration tests (up from 13), including the two bugs above (both caught by
+   tests before this reached you, not after), child/child isolation across siblings of the
+   same parent, permission re-checks at play time, and the honest-failure path for playlist
+   import without `YOUTUBE_API_KEY`. 32 unit tests for the YouTube adapter.
+
+**Status: done**, verified end-to-end against the live YouTube Data API v3 and a real browser
+session: real playlist import (title + all items with real metadata), bulk-approve for a
+child, device handoff, the child home screen, playlist browsing, video playback with a
+working "Next Approved Video" within the playlist, and exiting back to the parent dashboard
+via PIN. See "Major technical limitations" above for the one honest gap: website playback is
+contained (sandboxed iframe, always-visible exit) but not redirect-proof — that needs a
+native WebView, a Milestone 8/9 capability.
+
+## Milestones 4–10
 
 Unchanged from PRODUCT_REQUIREMENTS.md's list; each will get this same treatment (a short
 plan reviewed before implementation, external-credential stop points called out explicitly)
