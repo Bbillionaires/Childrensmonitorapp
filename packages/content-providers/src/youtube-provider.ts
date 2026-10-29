@@ -118,9 +118,11 @@ function toProviderMetadata(item: YouTubeVideoItem): ProviderVideoMetadata {
  * misfiled as a generic website; `fetchVideoMetadata`/`fetchPlaylistItems` throw
  * `ContentProviderNotConfiguredError` when no key is present, rather than fabricating data.
  *
- * NOTE: the parsing logic below is unit-tested against YouTube's documented response
- * shape (see youtube-provider.test.ts); it has not been exercised against the live API in
- * this environment, since no YOUTUBE_API_KEY was available to test with.
+ * NOTE: the parsing logic below is unit-tested against YouTube's documented response shape
+ * (see youtube-provider.test.ts) and has also been verified against the live API (fetching
+ * real video metadata end-to-end through services/api, into the approval queue, and into a
+ * child's approved library in a browser session) — `fetchPlaylistItems`' pagination has
+ * only been exercised via its unit tests, not yet against a real multi-page playlist.
  */
 export class YouTubeContentProvider implements ContentProvider {
   readonly id = "youtube";

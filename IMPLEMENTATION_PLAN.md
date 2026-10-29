@@ -134,11 +134,13 @@ walkthrough (register → dashboard → create/edit child).
    approve/reject correctly granting/revoking `ChildContentPermission`, and the same
    cross-parent isolation guarantee extended to content and approvals.
 
-**Status: done**, except the YouTube adapter's live API calls — no `YOUTUBE_API_KEY` was
-available in this environment, so only its URL-parsing/response-mapping logic is
-unit-tested (against YouTube's documented response shape via a mocked `fetch`), not a real
-network call. Everything else (website submission, the approval pipeline, the UI) is
-verified against the live local Postgres and a real browser session.
+**Status: done**, including the YouTube adapter's live API calls — a `YOUTUBE_API_KEY` was
+supplied after the initial implementation and used to verify a real submission end-to-end
+(real title/creator/duration/thumbnail/`madeForKids` fetched from `videos.list`, through the
+API, into the approval queue, into the approved library, in a real browser session) — not
+just the mocked unit tests covering the parsing/mapping logic against YouTube's documented
+response shape. Website submission, the approval pipeline, and the UI were already verified
+against the live local Postgres and a real browser session.
 
 ## Milestones 3–10
 
