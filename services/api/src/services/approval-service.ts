@@ -1,4 +1,4 @@
-import { prisma } from "@app/database";
+import { prisma, type ApprovalSource } from "@app/database";
 import type { ApprovalDecisionValue, BulkApprovalResultItem, ChildContentReviewItem } from "@app/types";
 import { NotFoundError } from "../lib/errors.js";
 import { writeAuditLog } from "./audit.js";
@@ -64,6 +64,7 @@ export async function decideApproval(
   contentId: string,
   decision: ApprovalDecisionValue,
   notes: string | undefined,
+  source: ApprovalSource = "MANUAL",
 ): Promise<void> {
   await assertOwnedChild(parentAccountId, childId);
 
@@ -77,7 +78,7 @@ export async function decideApproval(
   await prisma.$transaction(async (tx) => {
     const approval = await tx.parentApproval.upsert({
       where: { childId_contentId: { childId, contentId } },
-      update: { decision, decidedAt: new Date(), decidedByUserId: actorUserId, notes },
+      update: { decision, decidedAt: new Date(), decidedByUserId: actorUserId, notes, source },
       create: {
         parentAccountId,
         childId,
@@ -85,7 +86,7 @@ export async function decideApproval(
         decision,
         decidedByUserId: actorUserId,
         notes,
-        source: "MANUAL",
+        source,
       },
     });
 

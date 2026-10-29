@@ -34,6 +34,12 @@ export interface ProviderPlaylistMetadata {
   description: string | null;
 }
 
+export interface VideoSearchParams {
+  /** Free-text query — typically the topics from a translated DiscoveryQuery, joined. */
+  query: string;
+  maxResults?: number;
+}
+
 /**
  * Implemented once per content source. `services/api` is the only caller — a provider
  * adapter must never be imported by a client app, since only the API is allowed to hold
@@ -54,4 +60,10 @@ export interface ContentProvider {
    * DATABASE_SCHEMA.md's note on Playlist uniqueness.
    */
   extractPlaylistRefId?(url: string): string | null;
+  /**
+   * Optional — not every provider exposes search (a website "provider" doesn't). Powers
+   * Milestone 4's AI-assisted discovery: a DiscoveryQuery's topics become a search string
+   * here, never a literal scrape of search results.
+   */
+  searchVideos?(params: VideoSearchParams): Promise<ProviderVideoMetadata[]>;
 }

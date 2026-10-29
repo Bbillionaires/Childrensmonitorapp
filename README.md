@@ -80,14 +80,13 @@ including what the credential is for, where to obtain it, and which environment 
 
 ## Status
 
-Milestones 1–3 are implemented: monorepo scaffold, full domain database schema, parent
+Milestones 1–4 are implemented: monorepo scaffold, full domain database schema, parent
 authentication, parent dashboard, child profile management, URL and playlist import (a real
-YouTube adapter plus a website-whitelist fallback — no scraping either way), the parent
-approval pipeline (including bulk select/approve/reject), and the actual child-facing
-experience — a device-handoff session model, a closed library showing only approved content,
-and controlled playback (Next Approved Video/Replay/Back to Library, no arbitrary
-recommendations). All of it verified end-to-end against the live YouTube Data API v3, a live
-local Postgres, and real browser sessions — including two real bugs (a playlist-URL
-recognition gap and a refresh-token-revocation gap on device handoff) that were caught by
-tests before they reached anyone. See [IMPLEMENTATION_PLAN.md](./IMPLEMENTATION_PLAN.md) for
-what's next.
+YouTube adapter plus a website-whitelist fallback — no scraping anywhere), the parent
+approval pipeline (bulk select/approve/reject), the child-facing experience (device-handoff
+sessions, a closed library, controlled playback), and AI-assisted discovery (a natural-
+language brief → a Claude-translated structured query → a real YouTube search → candidates a
+parent reviews and approves — never auto-visible to a child). YouTube search is verified
+against the live API; the Claude translator is unit-tested but not yet exercised live — no
+`ANTHROPIC_API_KEY` has been configured here. See
+[IMPLEMENTATION_PLAN.md](./IMPLEMENTATION_PLAN.md) for what's next.

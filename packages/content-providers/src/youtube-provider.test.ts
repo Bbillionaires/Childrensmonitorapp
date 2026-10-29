@@ -187,6 +187,46 @@ describe("YouTubeContentProvider", () => {
     expect(embed.disableRelatedContent).toBe(true);
   });
 
+  it("searchVideos always requests safeSearch=strict and maps results to full metadata", async () => {
+    const fetchMock = vi.fn().mockImplementation(async (url: string) => {
+      if (url.includes("/search")) {
+        expect(url).toContain("safeSearch=strict");
+        expect(url).toContain("q=planets+gravity");
+        return {
+          ok: true,
+          json: async () => ({ items: [{ id: { videoId: "abc12345678" } }] }),
+        };
+      }
+      return {
+        ok: true,
+        json: async () => ({
+          items: [
+            {
+              id: "abc12345678",
+              snippet: { title: "Planets for Kids", channelTitle: "Science Channel" },
+              contentDetails: { duration: "PT10M" },
+              status: { madeForKids: true },
+            },
+          ],
+        }),
+      };
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const provider = new YouTubeContentProvider("test-api-key");
+    const results = await provider.searchVideos({ query: "planets gravity" });
+
+    expect(results).toHaveLength(1);
+    expect(results[0]).toMatchObject({ providerRefId: "abc12345678", title: "Planets for Kids" });
+  });
+
+  it("searchVideos throws ContentProviderNotConfiguredError without a key", async () => {
+    const provider = new YouTubeContentProvider(undefined);
+    await expect(provider.searchVideos({ query: "anything" })).rejects.toThrow(
+      ContentProviderNotConfiguredError,
+    );
+  });
+
   it("fetchPlaylistMetadata maps the documented playlists.list response shape", async () => {
     vi.stubGlobal(
       "fetch",

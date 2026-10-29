@@ -15,4 +15,10 @@ export class ContentProviderRegistry {
   resolve(url: string): ContentProvider | undefined {
     return this.providers.find((provider) => provider.canHandle(url));
   }
+
+  /** Looks up a registered adapter by its own id (e.g. "youtube") rather than by URL — used
+   * where there's no URL to resolve from, like AI-discovery search. */
+  getById(id: string): ContentProvider | undefined {
+    return this.providers.find((provider) => provider.id === id);
+  }
 }

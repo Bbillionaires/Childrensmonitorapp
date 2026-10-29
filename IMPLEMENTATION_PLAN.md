@@ -198,7 +198,46 @@ via PIN. See "Major technical limitations" above for the one honest gap: website
 contained (sandboxed iframe, always-visible exit) but not redirect-proof — that needs a
 native WebView, a Milestone 8/9 capability.
 
-## Milestones 4–10
+## Milestone 4 — exact implementation plan
+
+1. `packages/content-providers`: `searchVideos` added to the YouTube adapter and the
+   `ContentProvider` interface (optional — a website "provider" doesn't search), using the
+   official `search.list` endpoint with `safeSearch: strict` always set. `ContentProviderRegistry.getById`
+   added since discovery needs a provider by id, not resolved from a submitted URL.
+2. `packages/ai`: a real `ClaudeDiscoveryTranslator` using the Claude API's structured
+   outputs (`client.messages.parse` + `zodOutputFormat`, `claude-opus-5-5`) — guaranteed
+   schema-valid JSON instead of hand-parsed free text. `createDiscoveryTranslator` returns
+   `undefined` without `ANTHROPIC_API_KEY`, so the route fails honestly (503) rather than
+   fabricating a translation.
+3. `services/api`: `runDiscoverySearch` (brief → structured query → YouTube search →
+   persisted `Content`/`ContentSubmission`/`SearchRequest`/`AIRecommendation` rows, before a
+   parent ever sees a candidate), `decideDiscoveryRecommendations` (reuses `decideApproval`
+   tagged `source: "AI_DISCOVERY"` for the audit trail — the only thing that can make a
+   discovered video visible to a child, exactly like every other approval path), and
+   `createPlaylistFromDiscovery` (bundles a selection into a new parent-owned playlist).
+4. `apps/web`: a real Discover Content page — natural-language brief, a results grid with
+   each candidate's match reason, Select All/Deselect All (manual selection is just
+   unchecking), Approve Selected/Reject, a saved-searches list (every search is persisted, so
+   "Save Search" needed no separate action), and Create Playlist from a selection.
+5. Tests: 5 new API integration tests (parent/parent isolation extended to recommendations
+   and playlist creation, the `AI_DISCOVERY` source tag, honest 503 without the key) and 5
+   unit tests for the translator against a mocked Anthropic client. 3 new YouTube adapter
+   unit tests for `searchVideos`.
+
+**Status:** YouTube search is implemented and **verified against the live API** (a real
+query for "planets gravity rockets" returned six relevant, correctly-tagged results with
+real `madeForKids` flags). The Claude translator is implemented and unit-tested against a
+mocked client, but **not yet exercised against the live Claude API** — no `ANTHROPIC_API_KEY`
+was available in this environment. The honest-failure path (503, not fabricated results) is
+verified in a real browser session. See the credentials table above for what's needed and
+where to get it.
+
+**Cost note:** YouTube's `search.list` costs 100 quota units per call against the same
+10,000/day free quota that metadata fetches barely touch (~1 unit each) — so this feature
+caps out around 100 discovery searches/day on the free tier before quota becomes a
+consideration, markedly more constrained than ordinary URL/playlist import.
+
+## Milestones 5–10
 
 Unchanged from PRODUCT_REQUIREMENTS.md's list; each will get this same treatment (a short
 plan reviewed before implementation, external-credential stop points called out explicitly)

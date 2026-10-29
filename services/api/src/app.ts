@@ -8,6 +8,7 @@ import authRoutes from "./routes/auth.js";
 import parentRoutes from "./routes/parents.js";
 import contentRoutes from "./routes/content.js";
 import playlistRoutes from "./routes/playlists.js";
+import discoverRoutes from "./routes/discover.js";
 import childRoutes from "./routes/child.js";
 import { createEmailSender } from "./services/email.js";
 
@@ -39,6 +40,7 @@ export async function buildApp(): Promise<FastifyInstance> {
       await parentRoutes(instance, { env });
       await contentRoutes(instance, { env });
       await playlistRoutes(instance, { env });
+      await discoverRoutes(instance, { env });
     },
     { prefix: "/api/parents" },
   );

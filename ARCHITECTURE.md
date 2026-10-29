@@ -133,13 +133,27 @@ underlying model does.
 
 ```ts
 interface DiscoveryTranslator {
-  translate(brief: string, context: { childAge?: number }): Promise<DiscoveryQuery>;
+  translate(brief: string, context: DiscoveryContext): Promise<DiscoveryQuery>;
 }
 ```
 
-Implemented against the Claude API in Milestone 4, behind this interface so the LLM provider
-is swappable and so the MVP can ship with a clearly-labeled rule-based fallback if no API key
-is configured.
+Implemented against the Claude API (`claude-opus-5-5`) in Milestone 4 using structured
+outputs (`client.messages.parse` + a Zod schema), so the translation is guaranteed
+schema-valid JSON rather than hand-parsed free text — behind this interface so the LLM
+provider stays swappable. Without `ANTHROPIC_API_KEY` configured, the factory
+(`createDiscoveryTranslator`) returns `undefined` and the discovery route fails honestly
+with a 503, the same pattern as a YouTube submission without `YOUTUBE_API_KEY` — there is no
+rule-based fallback that would risk silently returning worse results without saying so.
+
+The structured query's `topics` become a search string against the relevant
+`ContentProvider`'s own `searchVideos` (YouTube's official `search.list`, always with
+`safeSearch: strict` as a defense-in-depth input filter — never a scrape). Every candidate is
+persisted as `Content` + an `AIRecommendation` row before a parent ever sees it; nothing here
+touches `ParentApproval` or `ChildContentPermission` — per PRODUCT_REQUIREMENTS.md, an AI
+suggestion only reaches a child once the parent explicitly approves it, exactly like any
+other submitted content. A candidate's `matchReason` is reported honestly as which derived
+search terms found it (YouTube's own relevance ranking), not a per-video explanation an LLM
+invented — that keeps the cost to one Claude call per search, not one per candidate.
 
 ## Deployment shape (recommended, not yet provisioned)
 

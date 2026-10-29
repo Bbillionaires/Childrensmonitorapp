@@ -1,4 +1,10 @@
-import type { ContentProvider, EmbedInfo, ProviderPlaylistMetadata, ProviderVideoMetadata } from "./types.js";
+import type {
+  ContentProvider,
+  EmbedInfo,
+  ProviderPlaylistMetadata,
+  ProviderVideoMetadata,
+  VideoSearchParams,
+} from "./types.js";
 
 const YOUTUBE_HOSTS = new Set([
   "youtube.com",
@@ -221,6 +227,35 @@ export class YouTubeContentProvider implements ContentProvider {
 
   extractPlaylistRefId(url: string): string | null {
     return extractYouTubePlaylistId(url);
+  }
+
+  async searchVideos(params: VideoSearchParams): Promise<ProviderVideoMetadata[]> {
+    this.requireApiKey();
+
+    const searchParams = new URLSearchParams({
+      part: "snippet",
+      type: "video",
+      q: params.query,
+      maxResults: String(params.maxResults ?? 12),
+      // Always strict for a children's content discovery feature — this is a defense-in-depth
+      // input filter, never a substitute for the Supervision Score review a parent still does
+      // before anything reaches a child (see SUPERVISION_SCORE.md).
+      safeSearch: "strict",
+      key: this.apiKey!,
+    });
+
+    const response = await fetch(`${API_BASE}/search?${searchParams.toString()}`);
+    if (!response.ok) {
+      throw new Error(`YouTube API error searching videos: ${response.status}`);
+    }
+    const data = (await response.json()) as {
+      items?: Array<{ id?: { videoId?: string } }>;
+    };
+    const videoIds = (data.items ?? [])
+      .map((item) => item.id?.videoId)
+      .filter((id): id is string => Boolean(id));
+
+    return this.fetchVideosByIds(videoIds);
   }
 
   private requireApiKey(): void {

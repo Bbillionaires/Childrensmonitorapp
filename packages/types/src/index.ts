@@ -4,3 +4,4 @@ export * from "./session.js";
 export * from "./content.js";
 export * from "./playlist.js";
 export * from "./child-session.js";
+export * from "./discovery.js";
