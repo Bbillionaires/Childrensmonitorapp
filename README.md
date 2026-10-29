@@ -85,8 +85,11 @@ authentication, parent dashboard, child profile management, URL and playlist imp
 YouTube adapter plus a website-whitelist fallback — no scraping anywhere), the parent
 approval pipeline (bulk select/approve/reject), the child-facing experience (device-handoff
 sessions, a closed library, controlled playback), and AI-assisted discovery (a natural-
-language brief → a Claude-translated structured query → a real YouTube search → candidates a
-parent reviews and approves — never auto-visible to a child). YouTube search is verified
-against the live API; the Claude translator is unit-tested but not yet exercised live — no
-`ANTHROPIC_API_KEY` has been configured here. See
+language brief → a structured query → a real YouTube search → candidates a parent reviews and
+approves — never auto-visible to a child). Discovery runs on a dual-provider setup: OpenAI as
+the cost-efficient primary translator (this feature is funded by one shared, operator-paid
+key, not bring-your-own-key, so cost per call matters), with Claude as a fallback for calls
+OpenAI's provider fails on. YouTube search is verified against the live API; neither AI
+provider has been exercised live yet — no `OPENAI_API_KEY` or `ANTHROPIC_API_KEY` has been
+configured here (both are unit-tested against mocked clients). See
 [IMPLEMENTATION_PLAN.md](./IMPLEMENTATION_PLAN.md) for what's next.

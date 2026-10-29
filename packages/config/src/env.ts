@@ -19,6 +19,8 @@ const envSchema = z.object({
   EMAIL_FROM: z.string().optional(),
   YOUTUBE_API_KEY: z.string().optional(),
   ANTHROPIC_API_KEY: z.string().optional(),
+  OPENAI_API_KEY: z.string().optional(),
+  OPENAI_MODEL: z.string().optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;

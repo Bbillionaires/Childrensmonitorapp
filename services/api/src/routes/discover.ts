@@ -19,14 +19,25 @@ import {
 
 /**
  * Mounted under /api/parents, same guards as every other parent route. See
- * IMPLEMENTATION_PLAN.md for the ANTHROPIC_API_KEY this needs — searches honestly fail with
- * 503 (not fabricated results) when it's missing, same pattern as a YouTube submission
- * without YOUTUBE_API_KEY.
+ * IMPLEMENTATION_PLAN.md for the OPENAI_API_KEY/ANTHROPIC_API_KEY this needs — searches
+ * honestly fail with 503 (not fabricated results) when neither is configured, same pattern
+ * as a YouTube submission without YOUTUBE_API_KEY.
  */
+const DISCOVERY_RATE_LIMIT = { max: 10, timeWindow: "1 hour" };
+
 export default async function discoverRoutes(fastify: FastifyInstance, opts: { env: Env }) {
   const { env } = opts;
 
-  fastify.post("/discover", { preHandler: fastify.requireCsrfHeader }, async (request, reply) => {
+  // Unlike ordinary CRUD, every call here costs real money (an LLM call plus a 100-quota-unit
+  // YouTube search) from a shared, operator-funded key — not a per-user credential — so it
+  // gets its own, much stricter limit than the app-wide default. Keyed by IP (the simplest
+  // option available at this hook stage, before the route's own preHandler has decoded the
+  // session); a per-parent-account limit would be a reasonable follow-up once real usage
+  // patterns are known.
+  fastify.post(
+    "/discover",
+    { preHandler: fastify.requireCsrfHeader, config: { rateLimit: DISCOVERY_RATE_LIMIT } },
+    async (request, reply) => {
     const claims = request.sessionClaims as ParentSessionClaims;
     const body = parseOrReject(discoverySearchRequestSchema, request.body, reply);
     if (!body) return;

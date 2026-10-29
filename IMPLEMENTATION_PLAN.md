@@ -53,13 +53,19 @@ Postgres database, which can be run locally via Docker with no third-party accou
 |---|---|---|---|
 | `DATABASE_URL` | Any environment beyond local Docker Postgres (staging/production) | A managed Postgres provider (Railway, Supabase, RDS, etc.) | `DATABASE_URL` |
 | `YOUTUBE_API_KEY` | Milestone 2 — fetching real video/playlist metadata from YouTube | Google Cloud Console → enable "YouTube Data API v3" → create an API key | `YOUTUBE_API_KEY` |
-| `ANTHROPIC_API_KEY` | Milestone 4 — AI-assisted discovery (natural language → structured query) | console.anthropic.com → API keys | `ANTHROPIC_API_KEY` |
+| `OPENAI_API_KEY` | Milestone 4 — AI-assisted discovery, **primary** provider (natural language → structured query) | platform.openai.com/api-keys | `OPENAI_API_KEY` |
+| `OPENAI_MODEL` (optional) | Overrides the default cost-tier model (`gpt-5.4-mini`) | n/a — just a config value | `OPENAI_MODEL` |
+| `ANTHROPIC_API_KEY` | Milestone 4 — AI-assisted discovery, **fallback** provider only (used when OpenAI's call fails) | console.anthropic.com → API keys | `ANTHROPIC_API_KEY` |
 | `RESEND_API_KEY` (or equivalent) | Milestone 1's password-reset email delivery in a real (non-local) environment | resend.com (or any transactional email provider) | `RESEND_API_KEY` |
 | `JWT_ACCESS_SECRET` / `JWT_REFRESH_SECRET` | Milestone 1 — session signing | Generate locally (`openssl rand -base64 48`); not a third-party account | same names |
 
-Until `YOUTUBE_API_KEY` and `ANTHROPIC_API_KEY` are supplied, `content-providers` and `ai`
-ship as clearly labeled interfaces/stubs — no fabricated metadata, no fake AI responses are
-returned as if real.
+Until `YOUTUBE_API_KEY` is supplied, `content-providers` ships as a clearly labeled
+interface/stub — no fabricated metadata is ever returned as if real. Discovery
+(`packages/ai`) needs at least one of `OPENAI_API_KEY`/`ANTHROPIC_API_KEY`; with neither set,
+the factory returns `undefined` and the route fails honestly (503) rather than faking a
+translation. Only `OPENAI_API_KEY` is required for discovery to work at all — Anthropic is
+resilience, not a hard dependency — but both configured together is the recommended setup
+(see Milestone 4 below for why).
 
 ## Major technical limitations to keep in view
 
@@ -236,6 +242,43 @@ where to get it.
 10,000/day free quota that metadata fetches barely touch (~1 unit each) — so this feature
 caps out around 100 discovery searches/day on the free tier before quota becomes a
 consideration, markedly more constrained than ordinary URL/playlist import.
+
+### Milestone 4 follow-up — dual-provider discovery (OpenAI primary, Claude fallback)
+
+The architecture above assumed a single translator. In practice, discovery is funded by one
+shared, operator-paid key serving every parent on the app (not bring-your-own-key), so the
+per-call cost of each search matters a lot more than it would for a single user. This
+follow-up reworks `packages/ai` into a cost-optimized, resilient two-provider setup:
+
+1. `packages/ai/src/discovery-schema.ts`: the structured-output schema and prompt moved into
+   one shared module (built against `zod/v4`, since Anthropic's `zodOutputFormat` requires
+   the v4-shaped type while OpenAI's `zodTextFormat` accepts either — zod 3.23+ ships both
+   namespaces side by side, so this didn't require migrating the rest of the monorepo off
+   `zod` v3), so both providers translate a brief identically.
+2. `OpenAIDiscoveryTranslator` (new, **primary**): OpenAI's Responses API
+   (`client.responses.parse` + `zodTextFormat`), defaulting to `gpt-5.4-mini` — the
+   cost-efficient tier appropriate for a high-volume, shared-key feature — overridable via
+   `OPENAI_MODEL` (e.g. the even cheaper `gpt-5.4-nano`, if volume ever calls for it).
+3. `ClaudeDiscoveryTranslator` (unchanged logic, repositioned as **fallback only**): used when
+   OpenAI's call throws (outage, malformed response), not for routine traffic.
+4. `FallbackDiscoveryTranslator`: tries the primary, falls back on any failure, and only
+   throws (with both error messages) if the fallback also fails.
+5. `createDiscoveryTranslator({ openaiApiKey, openaiModel, anthropicApiKey })`: both keys →
+   fallback composite; one key → that provider alone; neither → `undefined` (same honest
+   503-on-missing-config principle as every other integration in this project).
+6. The discovery endpoint (`POST /api/parents/discover`) now has its own rate limit — 10
+   requests/hour, keyed by IP — separate from the app-wide default, since each call spends
+   real money (an LLM call plus a 100-quota-unit YouTube search) from the shared key rather
+   than a per-user credential.
+7. Tests: 15 unit tests across `openai-translator.test.ts` (4), `fallback-translator.test.ts`
+   (4), `factory.test.ts` (4), and the trimmed `claude-translator.test.ts` (3) — all against
+   mocked SDK clients, no live calls.
+
+**Status:** Implemented, typechecked, and unit-tested (15/15 passing). **Not yet exercised
+against the live OpenAI API** — no `OPENAI_API_KEY` was available in this environment; same
+honest-gap pattern as the original Claude translator above. `ANTHROPIC_API_KEY` is now
+optional (fallback only) — `OPENAI_API_KEY` is the credential actually required for discovery
+to function day-to-day.
 
 ## Milestones 5–10
 

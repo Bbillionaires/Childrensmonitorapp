@@ -8,7 +8,7 @@ vi.mock("@anthropic-ai/sdk", () => ({
   })),
 }));
 
-const { ClaudeDiscoveryTranslator, createDiscoveryTranslator } = await import("./claude-translator.js");
+const { ClaudeDiscoveryTranslator } = await import("./claude-translator.js");
 
 describe("ClaudeDiscoveryTranslator", () => {
   beforeEach(() => {
@@ -65,15 +65,5 @@ describe("ClaudeDiscoveryTranslator", () => {
     const userContent = parseMock.mock.calls[0]![0].messages[0].content as string;
     expect(userContent).toContain("AGE_6_8");
     expect(userContent).toContain("dinosaurs");
-  });
-});
-
-describe("createDiscoveryTranslator", () => {
-  it("returns undefined without an API key, rather than a translator that would fail at call time", () => {
-    expect(createDiscoveryTranslator(undefined)).toBeUndefined();
-  });
-
-  it("returns a real translator instance when a key is present", () => {
-    expect(createDiscoveryTranslator("some-key")).toBeInstanceOf(ClaudeDiscoveryTranslator);
   });
 });

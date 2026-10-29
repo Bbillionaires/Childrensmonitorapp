@@ -137,13 +137,28 @@ interface DiscoveryTranslator {
 }
 ```
 
-Implemented against the Claude API (`claude-opus-5-5`) in Milestone 4 using structured
-outputs (`client.messages.parse` + a Zod schema), so the translation is guaranteed
-schema-valid JSON rather than hand-parsed free text — behind this interface so the LLM
-provider stays swappable. Without `ANTHROPIC_API_KEY` configured, the factory
-(`createDiscoveryTranslator`) returns `undefined` and the discovery route fails honestly
-with a 503, the same pattern as a YouTube submission without `YOUTUBE_API_KEY` — there is no
-rule-based fallback that would risk silently returning worse results without saying so.
+Implemented in Milestone 4 using each provider's structured-output support — guaranteed
+schema-valid JSON against one shared Zod schema, rather than hand-parsed free text — behind
+this interface so the LLM provider stays swappable. Discovery is funded by one shared,
+operator-paid key serving every parent, not bring-your-own-key, so cost per call is a first-
+class concern: `createDiscoveryTranslator({ openaiApiKey, openaiModel, anthropicApiKey })`
+builds an **OpenAI-primary, Claude-fallback** composite:
+
+- `OpenAIDiscoveryTranslator` (primary) — OpenAI's Responses API (`client.responses.parse` +
+  `zodTextFormat`), default model `gpt-5.4-mini` (a low-cost tier appropriate for high-volume,
+  shared-key traffic; overridable via `OPENAI_MODEL`).
+- `ClaudeDiscoveryTranslator` (fallback only) — `client.messages.parse` + `zodOutputFormat`,
+  `claude-opus-5-5`; only invoked when the primary's call throws.
+- `FallbackDiscoveryTranslator` wraps both: primary first, fallback on any error, and only
+  throws (naming both failures) if the fallback also fails.
+
+With only one of `OPENAI_API_KEY`/`ANTHROPIC_API_KEY` configured, the factory returns that
+provider alone (no fallback). With neither, it returns `undefined` and the discovery route
+fails honestly with a 503, the same pattern as a YouTube submission without
+`YOUTUBE_API_KEY` — there is no rule-based fallback that would risk silently returning worse
+results without saying so. Because every call here spends real money from the shared key, the
+discovery route also carries its own stricter rate limit (10 requests/hour per IP), separate
+from the app's default.
 
 The structured query's `topics` become a search string against the relevant
 `ContentProvider`'s own `searchVideos` (YouTube's official `search.list`, always with

@@ -32,7 +32,11 @@ export async function runDiscoverySearch(
   childId: string | undefined,
   rawBrief: string,
 ): Promise<DiscoverySearchResponse> {
-  const translator = createDiscoveryTranslator(env.ANTHROPIC_API_KEY);
+  const translator = createDiscoveryTranslator({
+    openaiApiKey: env.OPENAI_API_KEY,
+    openaiModel: env.OPENAI_MODEL,
+    anthropicApiKey: env.ANTHROPIC_API_KEY,
+  });
   if (!translator) throw new DiscoveryNotConfiguredError();
 
   let child: { ageRange: string | null; interests: string[] } | null = null;
