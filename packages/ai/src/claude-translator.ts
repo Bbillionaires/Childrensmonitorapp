@@ -14,9 +14,8 @@ import { DISCOVERY_SYSTEM_PROMPT, buildContextLines, buildUserMessage, discovery
  * volume from a shared, operator-funded key, so a cheaper provider is the default and Claude
  * is reserved for requests the primary provider fails on.
  *
- * NOTE: unit-tested with a mocked Anthropic client (see claude-translator.test.ts); not yet
- * exercised against the live API in this environment, since no ANTHROPIC_API_KEY was
- * available to test with.
+ * Unit-tested with a mocked Anthropic client (see claude-translator.test.ts) and separately
+ * verified against the live Claude API with a real ANTHROPIC_API_KEY.
  */
 export class ClaudeDiscoveryTranslator implements DiscoveryTranslator {
   private readonly client: Anthropic;

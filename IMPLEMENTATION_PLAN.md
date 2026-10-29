@@ -274,11 +274,14 @@ follow-up reworks `packages/ai` into a cost-optimized, resilient two-provider se
    (4), `factory.test.ts` (4), and the trimmed `claude-translator.test.ts` (3) — all against
    mocked SDK clients, no live calls.
 
-**Status:** Implemented, typechecked, and unit-tested (15/15 passing). **Not yet exercised
-against the live OpenAI API** — no `OPENAI_API_KEY` was available in this environment; same
-honest-gap pattern as the original Claude translator above. `ANTHROPIC_API_KEY` is now
-optional (fallback only) — `OPENAI_API_KEY` is the credential actually required for discovery
-to function day-to-day.
+**Status: done**, including live verification. Both `OPENAI_API_KEY` (a service-account key)
+and `ANTHROPIC_API_KEY` were supplied and each exercised directly against its real API via
+`createDiscoveryTranslator` with no mocking — a real brief ("educational videos about space
+and planets for my 7 year old, under 15 minutes") was translated by the OpenAI-primary path
+(`gpt-5.4-mini`) into a correctly-structured `DiscoveryQuery` (topics, inferred age, and
+duration limit in seconds, all extracted without being explicitly told the field names).
+`ANTHROPIC_API_KEY` is optional (fallback only) — `OPENAI_API_KEY` is the credential required
+for discovery to function day-to-day.
 
 ## Milestones 5–10
 

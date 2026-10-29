@@ -20,9 +20,8 @@ const DEFAULT_MODEL = "gpt-5.4-mini";
  * `zodTextFormat`) for guaranteed schema-valid JSON, the same approach as the Claude
  * fallback.
  *
- * NOTE: unit-tested with a mocked OpenAI client (see openai-translator.test.ts); not yet
- * exercised against the live API in this environment, since no OPENAI_API_KEY was available
- * to test with.
+ * Unit-tested with a mocked OpenAI client (see openai-translator.test.ts) and separately
+ * verified against the live Responses API with a real OPENAI_API_KEY.
  */
 export class OpenAIDiscoveryTranslator implements DiscoveryTranslator {
   private readonly client: OpenAI;

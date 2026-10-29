@@ -89,7 +89,5 @@ language brief → a structured query → a real YouTube search → candidates a
 approves — never auto-visible to a child). Discovery runs on a dual-provider setup: OpenAI as
 the cost-efficient primary translator (this feature is funded by one shared, operator-paid
 key, not bring-your-own-key, so cost per call matters), with Claude as a fallback for calls
-OpenAI's provider fails on. YouTube search is verified against the live API; neither AI
-provider has been exercised live yet — no `OPENAI_API_KEY` or `ANTHROPIC_API_KEY` has been
-configured here (both are unit-tested against mocked clients). See
-[IMPLEMENTATION_PLAN.md](./IMPLEMENTATION_PLAN.md) for what's next.
+OpenAI's provider fails on. YouTube search and both AI providers are verified against their
+live APIs. See [IMPLEMENTATION_PLAN.md](./IMPLEMENTATION_PLAN.md) for what's next.
