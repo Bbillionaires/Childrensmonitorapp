@@ -85,7 +85,7 @@ export async function runDiscoverySearch(
   for (let rank = 0; rank < candidates.length; rank += 1) {
     const content = await upsertVideoContent(candidates[rank]!, parentAccountId);
     await recordContentSubmission(parentAccountId, actorUserId, content, content.sourceUrl);
-    await ensureContentScored(content.id);
+    await ensureContentScored(env, content.id);
     // Honest about how matching works: candidates come from YouTube's own relevance ranking
     // for the derived search terms, not a per-video explanation Claude invented — see
     // IMPLEMENTATION_PLAN.md.

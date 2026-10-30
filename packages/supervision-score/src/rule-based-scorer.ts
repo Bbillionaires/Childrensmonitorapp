@@ -18,9 +18,9 @@ const FIRST_MATCH_PENALTY = 65;
 const ADDITIONAL_MATCH_PENALTY = 8;
 const MATCH_CONFIDENCE = 0.85;
 
-function scoreFromMatches(matchedTerms: string[]): { score: number; confidence: number } {
-  if (matchedTerms.length === 0) return { score: BASELINE_SCORE, confidence: BASELINE_CONFIDENCE };
-  const penalty = FIRST_MATCH_PENALTY + (matchedTerms.length - 1) * ADDITIONAL_MATCH_PENALTY;
+function scoreFromMatchCount(matchCount: number): { score: number; confidence: number } {
+  if (matchCount === 0) return { score: BASELINE_SCORE, confidence: BASELINE_CONFIDENCE };
+  const penalty = FIRST_MATCH_PENALTY + (matchCount - 1) * ADDITIONAL_MATCH_PENALTY;
   return { score: Math.max(0, BASELINE_SCORE - penalty), confidence: MATCH_CONFIDENCE };
 }
 
@@ -63,8 +63,14 @@ export class RuleBasedSupervisionScorer implements SupervisionScorer {
   private scoreCategory(categoryId: SafetyCategoryId, combinedText: string, input: ScoringInput): CategoryScore {
     const terms = CATEGORY_TERMS[categoryId];
     const matchedTerms = terms?.filter((term) => combinedText.includes(term)) ?? [];
-    const { score, confidence } = scoreFromMatches(matchedTerms);
+    const thumbnailFlagged = input.thumbnailFlags?.includes(categoryId) ?? false;
+    const { score, confidence } = scoreFromMatchCount(matchedTerms.length + (thumbnailFlagged ? 1 : 0));
     const detectedFactors = matchedTerms.map((term) => `Matched term: "${term}"`);
+    if (thumbnailFlagged) detectedFactors.push("Thumbnail image analysis flagged this category");
+
+    if (categoryId === "grooming_indicators") {
+      return this.applyCreatorCorroboration(input.creatorSignals, matchedTerms.length > 0, score, confidence, detectedFactors);
+    }
 
     if (categoryId === "age_appropriateness") {
       return this.applyMadeForKidsSignal(input.providerMadeForKids, score, confidence, detectedFactors);
@@ -80,6 +86,36 @@ export class RuleBasedSupervisionScorer implements SupervisionScorer {
     }
 
     return { categoryId, score, confidence, detectedFactors };
+  }
+
+  /**
+   * A brand-new, low-history channel is a weak, corroborating signal — never independent
+   * evidence of risk (most new channels are completely innocuous). It only ever raises
+   * confidence on a grooming_indicators match the title/description/transcript text already
+   * triggered, and never creates or worsens a score on its own — see CreatorSignals' doc
+   * comment in @app/content-providers.
+   */
+  private applyCreatorCorroboration(
+    creatorSignals: ScoringInput["creatorSignals"],
+    hadKeywordMatch: boolean,
+    score: number,
+    confidence: number,
+    detectedFactors: string[],
+  ): CategoryScore {
+    const isNewOrUnprovenChannel =
+      creatorSignals &&
+      ((creatorSignals.channelAgeDays !== null && creatorSignals.channelAgeDays < 30) ||
+        (creatorSignals.videoCount !== null && creatorSignals.videoCount <= 1));
+
+    if (!hadKeywordMatch || !isNewOrUnprovenChannel) {
+      return { categoryId: "grooming_indicators", score, confidence, detectedFactors };
+    }
+    return {
+      categoryId: "grooming_indicators",
+      score,
+      confidence: Math.min(1, confidence + 0.1),
+      detectedFactors: [...detectedFactors, "Corroborated by a new or low-history channel"],
+    };
   }
 
   /**
@@ -116,7 +152,7 @@ export class RuleBasedSupervisionScorer implements SupervisionScorer {
 
 function buildExplanation(categories: CategoryScore[]): string {
   const prefix =
-    "Rule-based, metadata-only assessment (title/description keyword matching and platform signals only — no transcript, audio, or frame analysis yet).";
+    "Rule-based assessment combining title/description keyword matching, platform signals, and — whenever available — transcript text, thumbnail image analysis, and channel history (see signalsUsed for exactly which ones were actually gathered for this piece of content).";
   const flagged = categories.filter((c) => c.detectedFactors.length > 0).sort((a, b) => a.score - b.score);
 
   if (flagged.length === 0) {
@@ -135,5 +171,7 @@ function buildSignalsUsed(input: ScoringInput): string[] {
   if (input.transcript) used.push("transcript");
   if (input.ocrText && input.ocrText.length > 0) used.push("ocrText");
   if (input.externalLinksFound && input.externalLinksFound.length > 0) used.push("externalLinksFound");
+  if (input.thumbnailFlags !== undefined) used.push("thumbnailFlags");
+  if (input.creatorSignals !== undefined) used.push("creatorSignals");
   return used;
 }

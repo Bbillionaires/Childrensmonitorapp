@@ -266,4 +266,114 @@ describe("YouTubeContentProvider", () => {
     );
     expect(provider.extractPlaylistRefId("https://www.youtube.com/watch?v=dQw4w9WgXcQ")).toBeNull();
   });
+
+  describe("fetchChannelSignals", () => {
+    it("maps the documented channels.list response shape, computing channel age from publishedAt", async () => {
+      const publishedAt = new Date(Date.now() - 10 * 86_400_000).toISOString();
+      vi.stubGlobal(
+        "fetch",
+        vi.fn().mockResolvedValue({
+          ok: true,
+          json: async () => ({
+            items: [{ snippet: { publishedAt }, statistics: { subscriberCount: "150", videoCount: "3" } }],
+          }),
+        }),
+      );
+      const provider = new YouTubeContentProvider("test-api-key");
+      const signals = await provider.fetchChannelSignals("UC123");
+      expect(signals.channelAgeDays).toBe(10);
+      expect(signals.subscriberCount).toBe(150);
+      expect(signals.videoCount).toBe(3);
+    });
+
+    it("returns a null subscriberCount when the channel hides it, rather than reporting 0", async () => {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn().mockResolvedValue({
+          ok: true,
+          json: async () => ({
+            items: [{ snippet: {}, statistics: { hiddenSubscriberCount: true, videoCount: "3" } }],
+          }),
+        }),
+      );
+      const provider = new YouTubeContentProvider("test-api-key");
+      const signals = await provider.fetchChannelSignals("UC123");
+      expect(signals.subscriberCount).toBeNull();
+    });
+
+    it("throws ContentProviderNotConfiguredError without a key", async () => {
+      const provider = new YouTubeContentProvider(undefined);
+      await expect(provider.fetchChannelSignals("UC123")).rejects.toThrow(ContentProviderNotConfiguredError);
+    });
+
+    it("throws when the channel is not found", async () => {
+      vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => ({ items: [] }) }));
+      const provider = new YouTubeContentProvider("test-api-key");
+      await expect(provider.fetchChannelSignals("UC123")).rejects.toThrow(/not found/i);
+    });
+  });
+
+  describe("fetchTranscript", () => {
+    function watchPageWithTracks(tracks: Array<{ baseUrl: string; languageCode: string }>): string {
+      return `<html><script>var ytInitialPlayerResponse = {"captions":{"playerCaptionsTracklistRenderer":{"captionTracks":${JSON.stringify(
+        tracks,
+      )}}}};</script></html>`;
+    }
+
+    it("fetches and concatenates the preferred (English) track's transcript text, decoding entities", async () => {
+      const html = watchPageWithTracks([
+        { baseUrl: "https://example.com/captions/fr", languageCode: "fr" },
+        { baseUrl: "https://example.com/captions/en", languageCode: "en" },
+      ]);
+      const fetchMock = vi.fn().mockImplementation(async (url: string) => {
+        if (url.includes("/watch?v=")) return { ok: true, text: async () => html };
+        if (url === "https://example.com/captions/en") {
+          return {
+            ok: true,
+            text: async () =>
+              `<transcript><text start="0" dur="1">Hello &amp; welcome</text><text start="1" dur="1">to the show</text></transcript>`,
+          };
+        }
+        throw new Error(`unexpected fetch: ${url}`);
+      });
+      vi.stubGlobal("fetch", fetchMock);
+
+      const provider = new YouTubeContentProvider("test-api-key");
+      const transcript = await provider.fetchTranscript("dQw4w9WgXcQ");
+      expect(transcript).toBe("Hello & welcome to the show");
+    });
+
+    it("returns null when the video has no captions, without throwing", async () => {
+      vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, text: async () => "<html>no captions here</html>" }));
+      const provider = new YouTubeContentProvider("test-api-key");
+      await expect(provider.fetchTranscript("dQw4w9WgXcQ")).resolves.toBeNull();
+    });
+
+    it("returns null (never throws) when the watch page fetch itself fails", async () => {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn().mockRejectedValue(new Error("network down")),
+      );
+      const provider = new YouTubeContentProvider("test-api-key");
+      await expect(provider.fetchTranscript("dQw4w9WgXcQ")).resolves.toBeNull();
+    });
+
+    it("returns null (never throws) when the embedded caption track JSON is malformed", async () => {
+      const html = `<html><script>"captionTracks":[{not valid json</script></html>`;
+      vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, text: async () => html }));
+      const provider = new YouTubeContentProvider("test-api-key");
+      await expect(provider.fetchTranscript("dQw4w9WgXcQ")).resolves.toBeNull();
+    });
+
+    it("works without an API key — this is not an official-API method", async () => {
+      const html = watchPageWithTracks([{ baseUrl: "https://example.com/captions/en", languageCode: "en" }]);
+      const fetchMock = vi.fn().mockImplementation(async (url: string) => {
+        if (url.includes("/watch?v=")) return { ok: true, text: async () => html };
+        return { ok: true, text: async () => `<transcript><text>fine</text></transcript>` };
+      });
+      vi.stubGlobal("fetch", fetchMock);
+      const provider = new YouTubeContentProvider(undefined);
+      await expect(provider.fetchTranscript("dQw4w9WgXcQ")).resolves.toBe("fine");
+    });
+  });
 });

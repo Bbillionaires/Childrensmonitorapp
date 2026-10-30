@@ -8,8 +8,11 @@ process.env.JWT_ACCESS_SECRET ??= "test-access-secret-at-least-16-chars";
 process.env.JWT_REFRESH_SECRET ??= "test-refresh-secret-at-least-16-chars";
 process.env.WEB_APP_ORIGIN ??= "http://localhost:3000";
 // Deliberately left unset: proves discovery search fails honestly (503) rather than
-// fabricating candidates — see packages/ai/src/claude-translator.ts.
+// fabricating candidates — see packages/ai/src/claude-translator.ts. Both providers must be
+// unset, since OPENAI_API_KEY (not ANTHROPIC_API_KEY) is the primary as of Milestone 4's
+// dual-provider follow-up.
 delete process.env.ANTHROPIC_API_KEY;
+delete process.env.OPENAI_API_KEY;
 
 const { buildApp } = await import("../app.js");
 const { prisma } = (await import("@app/database")) as { prisma: PrismaClient };

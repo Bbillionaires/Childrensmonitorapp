@@ -15,6 +15,14 @@ import {
 
 const QUEUE_FILTERS: QueueFilter[] = ["PENDING", "APPROVED", "REJECTED", "ALL"];
 
+// Milestone 7: scoring a never-before-seen piece of content can now spend real money (a
+// vision-model call analyzing its thumbnail, see scoring-service.ts's gatherDeepSignals) from
+// the same shared, operator-funded key discovery uses. Cost is bounded per unique content, not
+// per submission (re-submitting an already-scored URL is a cache hit), so this is a generous
+// defense-in-depth ceiling against many *distinct* new URLs in a short window, not a tight
+// budget like discovery's — a real parent submitting dozens of items in an hour is normal.
+const CONTENT_SUBMIT_RATE_LIMIT = { max: 60, timeWindow: "1 hour" };
+
 /**
  * Mounted under /api/parents, behind the same requireParentSession guard as
  * routes/parents.ts. Every child-scoped route re-checks that childId belongs to the calling
@@ -24,24 +32,28 @@ const QUEUE_FILTERS: QueueFilter[] = ["PENDING", "APPROVED", "REJECTED", "ALL"];
 export default async function contentRoutes(fastify: FastifyInstance, opts: { env: Env }) {
   const { env } = opts;
 
-  fastify.post("/content/submit", { preHandler: fastify.requireCsrfHeader }, async (request, reply) => {
-    const claims = request.sessionClaims as ParentSessionClaims;
-    const body = parseOrReject(contentSubmitRequestSchema, request.body, reply);
-    if (!body) return;
+  fastify.post(
+    "/content/submit",
+    { preHandler: fastify.requireCsrfHeader, config: { rateLimit: CONTENT_SUBMIT_RATE_LIMIT } },
+    async (request, reply) => {
+      const claims = request.sessionClaims as ParentSessionClaims;
+      const body = parseOrReject(contentSubmitRequestSchema, request.body, reply);
+      if (!body) return;
 
-    try {
-      const content = await submitContentUrl(env, claims.parentAccountId, claims.userId, body.url);
-      return reply.code(201).send({ content });
-    } catch (error) {
-      if (error instanceof ContentProviderNotConfiguredError) {
-        return reply.code(503).send({ error: error.message });
+      try {
+        const content = await submitContentUrl(env, claims.parentAccountId, claims.userId, body.url);
+        return reply.code(201).send({ content });
+      } catch (error) {
+        if (error instanceof ContentProviderNotConfiguredError) {
+          return reply.code(503).send({ error: error.message });
+        }
+        if (error instanceof Error && /not a recognizable|not found|unavailable/i.test(error.message)) {
+          return reply.code(422).send({ error: error.message });
+        }
+        throw error;
       }
-      if (error instanceof Error && /not a recognizable|not found|unavailable/i.test(error.message)) {
-        return reply.code(422).send({ error: error.message });
-      }
-      throw error;
-    }
-  });
+    },
+  );
 
   fastify.get("/content", async (request, reply) => {
     const claims = request.sessionClaims as ParentSessionClaims;

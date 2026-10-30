@@ -34,6 +34,18 @@ export interface ProviderPlaylistMetadata {
   description: string | null;
 }
 
+/**
+ * Official, API-key-only signals about the uploading channel — see SUPERVISION_SCORE.md's
+ * "creator/channel history signals" entry. Never a verdict on its own (see
+ * RuleBasedSupervisionScorer's use of it): a brand-new, low-history channel is a weak,
+ * corroborating signal, not independent evidence of risk.
+ */
+export interface CreatorSignals {
+  channelAgeDays: number | null;
+  subscriberCount: number | null;
+  videoCount: number | null;
+}
+
 export interface VideoSearchParams {
   /** Free-text query — typically the topics from a translated DiscoveryQuery, joined. */
   query: string;
@@ -66,4 +78,14 @@ export interface ContentProvider {
    * here, never a literal scrape of search results.
    */
   searchVideos?(params: VideoSearchParams): Promise<ProviderVideoMetadata[]>;
+  /** Optional — official, API-key-only channel stats. Throws ContentProviderNotConfiguredError
+   * without a key, same as every other official-API method here. */
+  fetchChannelSignals?(channelId: string): Promise<CreatorSignals>;
+  /**
+   * Optional — unlike every other method on this interface, NOT an official API call (see
+   * youtube-provider.ts's doc comment for exactly what it does and why). Must never throw:
+   * any failure (no captions, network error, YouTube changing its page structure) resolves to
+   * `null` so scoring continues without a transcript rather than breaking.
+   */
+  fetchTranscript?(providerRefId: string): Promise<string | null>;
 }

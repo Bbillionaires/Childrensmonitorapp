@@ -11,6 +11,8 @@ process.env.WEB_APP_ORIGIN ??= "http://localhost:3000";
 const { buildApp } = await import("../app.js");
 const { prisma } = (await import("@app/database")) as { prisma: PrismaClient };
 const { ensureContentScored } = await import("../services/scoring-service.js");
+const { loadEnv } = await import("@app/config");
+const env = loadEnv();
 
 interface CookieJar {
   accessToken?: string;
@@ -125,7 +127,7 @@ describe("Milestone 5: Supervision Score engine", () => {
       },
     });
 
-    await ensureContentScored(content.id);
+    await ensureContentScored(env, content.id);
 
     const score = await prisma.supervisionScore.findUniqueOrThrow({
       where: { contentId: content.id },

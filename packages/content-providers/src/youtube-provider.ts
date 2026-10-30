@@ -1,5 +1,6 @@
 import type {
   ContentProvider,
+  CreatorSignals,
   EmbedInfo,
   ProviderPlaylistMetadata,
   ProviderVideoMetadata,
@@ -84,6 +85,46 @@ export function parseIso8601Duration(duration: string | undefined): number | nul
   const minutes = Number(match[2] ?? 0);
   const seconds = Number(match[3] ?? 0);
   return hours * 3600 + minutes * 60 + seconds;
+}
+
+function parseIntOrNull(value: string | undefined): number | null {
+  if (value === undefined) return null;
+  const parsed = Number.parseInt(value, 10);
+  return Number.isNaN(parsed) ? null : parsed;
+}
+
+/** Finds the index of the `]` matching the `[` at `openIndex`, respecting quoted strings so a
+ * `]` inside a JSON string value doesn't end the scan early. Returns -1 if unbalanced. */
+function findMatchingBracket(text: string, openIndex: number): number {
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+  for (let i = openIndex; i < text.length; i += 1) {
+    const char = text[i];
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (char === "\\") escaped = true;
+      else if (char === '"') inString = false;
+      continue;
+    }
+    if (char === '"') inString = true;
+    else if (char === "[") depth += 1;
+    else if (char === "]") {
+      depth -= 1;
+      if (depth === 0) return i;
+    }
+  }
+  return -1;
+}
+
+function decodeHtmlEntities(text: string): string {
+  return text
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;|&apos;/g, "'")
+    .replace(/&#(\d+);/g, (_match, code: string) => String.fromCharCode(Number(code)));
 }
 
 interface YouTubeVideoItem {
@@ -256,6 +297,87 @@ export class YouTubeContentProvider implements ContentProvider {
       .filter((id): id is string => Boolean(id));
 
     return this.fetchVideosByIds(videoIds);
+  }
+
+  /** Official, API-key-only channel stats — see CreatorSignals' doc comment. */
+  async fetchChannelSignals(channelId: string): Promise<CreatorSignals> {
+    this.requireApiKey();
+
+    const params = new URLSearchParams({ part: "snippet,statistics", id: channelId, key: this.apiKey! });
+    const response = await fetch(`${API_BASE}/channels?${params.toString()}`);
+    if (!response.ok) {
+      throw new Error(`YouTube API error fetching channel signals: ${response.status}`);
+    }
+    const data = (await response.json()) as {
+      items?: Array<{
+        snippet?: { publishedAt?: string };
+        statistics?: { subscriberCount?: string; videoCount?: string; hiddenSubscriberCount?: boolean };
+      }>;
+    };
+    const item = data.items?.[0];
+    if (!item) throw new Error("Channel not found");
+
+    const publishedAt = item.snippet?.publishedAt ? new Date(item.snippet.publishedAt) : null;
+    return {
+      channelAgeDays: publishedAt ? Math.floor((Date.now() - publishedAt.getTime()) / 86_400_000) : null,
+      subscriberCount: item.statistics?.hiddenSubscriberCount ? null : parseIntOrNull(item.statistics?.subscriberCount),
+      videoCount: parseIntOrNull(item.statistics?.videoCount),
+    };
+  }
+
+  /**
+   * The one deliberate exception to "official API only" in this codebase — see
+   * ARCHITECTURE.md and IMPLEMENTATION_PLAN.md for why: YouTube's Data API only allows
+   * downloading a caption track under OAuth consent from the video's own owner, which doesn't
+   * scale to arbitrary third-party videos. This instead reads the caption track list YouTube's
+   * own web player embeds in the public watch page (the same data the player itself uses,
+   * fetched the same way any browser would — no video/audio download, no authentication
+   * bypass), then fetches the chosen track's own timed-text URL. It is not a documented or
+   * supported API and could break or be blocked without notice.
+   *
+   * MUST NEVER THROW: every failure mode (no captions available, network error, YouTube
+   * changing its page structure) resolves to `null` so a transcript is simply absent from
+   * scoring rather than breaking it — see SupervisionScorer's "degrade gracefully" contract.
+   */
+  async fetchTranscript(videoId: string): Promise<string | null> {
+    try {
+      const watchResponse = await fetch(`https://www.youtube.com/watch?v=${videoId}`, {
+        headers: {
+          "User-Agent":
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36",
+        },
+      });
+      if (!watchResponse.ok) return null;
+      const html = await watchResponse.text();
+
+      const marker = '"captionTracks":';
+      const markerIndex = html.indexOf(marker);
+      if (markerIndex === -1) return null; // No captions available for this video.
+
+      const arrayStart = html.indexOf("[", markerIndex);
+      const arrayEnd = findMatchingBracket(html, arrayStart);
+      if (arrayStart === -1 || arrayEnd === -1) return null;
+
+      const tracks = JSON.parse(html.slice(arrayStart, arrayEnd + 1)) as Array<{
+        baseUrl?: string;
+        languageCode?: string;
+      }>;
+      const track = tracks.find((t) => t.languageCode === "en") ?? tracks[0];
+      if (!track?.baseUrl) return null;
+
+      const transcriptResponse = await fetch(track.baseUrl);
+      if (!transcriptResponse.ok) return null;
+      const xml = await transcriptResponse.text();
+
+      const transcript = [...xml.matchAll(/<text[^>]*>([\s\S]*?)<\/text>/g)]
+        .map((match) => decodeHtmlEntities(match[1] ?? ""))
+        .join(" ")
+        .replace(/\s+/g, " ")
+        .trim();
+      return transcript.length > 0 ? transcript : null;
+    } catch {
+      return null;
+    }
   }
 
   private requireApiKey(): void {

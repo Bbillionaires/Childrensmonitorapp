@@ -20,6 +20,17 @@ export interface ScoringInput {
   transcript?: string;
   ocrText?: string[];
   externalLinksFound?: string[];
+  /** Safety categories an AI vision pass found visibly depicted in the thumbnail image — see
+   * ThumbnailAnalyzer in @app/ai. Treated like a keyword match on whichever categories it names. */
+  thumbnailFlags?: string[];
+  /** Official, API-key-only channel stats (Milestone 7) — see CreatorSignals in
+   * @app/content-providers. Only ever corroborates an already-triggered grooming_indicators
+   * match; never an independent penalty for being new, per RuleBasedSupervisionScorer. */
+  creatorSignals?: {
+    channelAgeDays: number | null;
+    subscriberCount: number | null;
+    videoCount: number | null;
+  };
 }
 
 export interface CategoryScore {

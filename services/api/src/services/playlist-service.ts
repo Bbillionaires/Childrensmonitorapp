@@ -69,7 +69,7 @@ export async function importPlaylist(
   for (let index = 0; index < items.length; index += 1) {
     const content = await upsertVideoContent(items[index]!, parentAccountId);
     await recordContentSubmission(parentAccountId, actorUserId, content, content.sourceUrl);
-    await ensureContentScored(content.id);
+    await ensureContentScored(env, content.id);
     const item = await prisma.playlistItem.create({
       data: { playlistId: playlist.id, contentId: content.id, position: index },
     });

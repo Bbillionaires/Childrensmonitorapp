@@ -13,6 +13,8 @@ const { buildApp } = await import("../app.js");
 const { prisma } = (await import("@app/database")) as { prisma: PrismaClient };
 const { registerParent, createChild, decide, cookieHeader } = await import("./helpers.js");
 const { ensureContentScored } = await import("../services/scoring-service.js");
+const { loadEnv } = await import("@app/config");
+const env = loadEnv();
 
 describe("Milestone 6: safety alerts", () => {
   let app: FastifyInstance;
@@ -47,7 +49,7 @@ describe("Milestone 6: safety alerts", () => {
         website: { create: { allowedDomain: "www.example.com" } },
       },
     });
-    await ensureContentScored(content.id);
+    await ensureContentScored(env, content.id);
     const initialScore = await prisma.supervisionScore.findUniqueOrThrow({ where: { contentId: content.id } });
     expect(
       (await prisma.scoreVersion.findUniqueOrThrow({ where: { id: initialScore.currentScoreVersionId } })).overallScore,
@@ -70,7 +72,7 @@ describe("Milestone 6: safety alerts", () => {
         description: "hate speech, nudity and nsfw material included",
       },
     });
-    await ensureContentScored(content.id);
+    await ensureContentScored(env, content.id);
 
     const versions = await prisma.scoreVersion.findMany({ where: { contentId: content.id }, orderBy: { analyzedAt: "asc" } });
     expect(versions).toHaveLength(2);
@@ -128,7 +130,7 @@ describe("Milestone 6: safety alerts", () => {
         website: { create: { allowedDomain: "www.example.com" } },
       },
     });
-    await ensureContentScored(content.id);
+    await ensureContentScored(env, content.id);
     const user = await prisma.user.findUniqueOrThrow({ where: { email: "keep-approved-parent@example.com" } });
     const parentAccount = await prisma.parentAccount.findFirstOrThrow({ where: { userId: user.id } });
     await prisma.contentSubmission.create({
@@ -140,7 +142,7 @@ describe("Milestone 6: safety alerts", () => {
       where: { id: content.id },
       data: { title: "suicide and extremist terrorist propaganda, racial slur content" },
     });
-    await ensureContentScored(content.id);
+    await ensureContentScored(env, content.id);
 
     const alertsResponse = await app.inject({
       method: "GET",
@@ -178,7 +180,7 @@ describe("Milestone 6: safety alerts", () => {
         website: { create: { allowedDomain: "www.example.com" } },
       },
     });
-    await ensureContentScored(content.id);
+    await ensureContentScored(env, content.id);
     const user = await prisma.user.findUniqueOrThrow({ where: { email: "alert-owner@example.com" } });
     const parentAccount = await prisma.parentAccount.findFirstOrThrow({ where: { userId: user.id } });
     await prisma.contentSubmission.create({
@@ -189,7 +191,7 @@ describe("Milestone 6: safety alerts", () => {
       where: { id: content.id },
       data: { title: "dm me, self-harm, hate speech, nudity, nsfw" },
     });
-    await ensureContentScored(content.id);
+    await ensureContentScored(env, content.id);
 
     const alertsForA = await app.inject({
       method: "GET",

@@ -116,7 +116,7 @@ export async function submitContentUrl(
     : await upsertWebsiteContent(rawUrl, parentAccountId);
 
   await recordContentSubmission(parentAccountId, actorUserId, content, rawUrl);
-  await ensureContentScored(content.id);
+  await ensureContentScored(env, content.id);
 
   return toContentSummary(content);
 }

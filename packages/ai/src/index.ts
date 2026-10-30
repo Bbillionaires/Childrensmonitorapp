@@ -2,4 +2,7 @@ export * from "./types.js";
 export * from "./claude-translator.js";
 export * from "./openai-translator.js";
 export * from "./fallback-translator.js";
+export * from "./claude-thumbnail-analyzer.js";
+export * from "./openai-thumbnail-analyzer.js";
+export * from "./fallback-thumbnail-analyzer.js";
 export * from "./factory.js";

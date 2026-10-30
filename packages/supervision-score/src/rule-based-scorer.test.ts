@@ -112,6 +112,87 @@ describe("RuleBasedSupervisionScorer", () => {
     );
     expect(result.explanation).toMatch(/gambling/i);
   });
+
+  it("marks down a category a thumbnail analysis flagged, even with clean title/description", async () => {
+    const result = await scorer.score(baseInput({ thumbnailFlags: ["weapons"] }));
+    const weapons = result.categories.find((c) => c.categoryId === "weapons")!;
+    expect(weapons.score).toBeLessThan(100);
+    expect(weapons.confidence).toBeGreaterThan(0.5);
+    expect(weapons.detectedFactors).toContain("Thumbnail image analysis flagged this category");
+
+    // Every other category is untouched.
+    const violence = result.categories.find((c) => c.categoryId === "violence")!;
+    expect(violence.score).toBe(100);
+
+    expect(result.signalsUsed).toContain("thumbnailFlags");
+  });
+
+  it("records thumbnailFlags as used even when it flags nothing, since the analysis still ran", async () => {
+    const result = await scorer.score(baseInput({ thumbnailFlags: [] }));
+    expect(result.signalsUsed).toContain("thumbnailFlags");
+    expect(result.categories.every((c) => c.score === 100)).toBe(true);
+  });
+
+  it("creator signals only corroborate (raise confidence on) an already-triggered grooming_indicators match — never an independent penalty for being new", async () => {
+    const newChannelAlone = await scorer.score(
+      baseInput({ creatorSignals: { channelAgeDays: 2, subscriberCount: 5, videoCount: 1 } }),
+    );
+    const grooming = newChannelAlone.categories.find((c) => c.categoryId === "grooming_indicators")!;
+    expect(grooming.score).toBe(100); // A new channel alone is not evidence of anything.
+    expect(grooming.detectedFactors).toHaveLength(0);
+    expect(newChannelAlone.signalsUsed).toContain("creatorSignals");
+
+    const withKeywordMatchOnly = await scorer.score(
+      baseInput({
+        content: {
+          id: "content-4",
+          title: "add me on snapchat for more",
+          description: null,
+          durationSeconds: 120,
+          creatorName: "Someone",
+        },
+      }),
+    );
+    const matchOnlyConfidence = withKeywordMatchOnly.categories.find((c) => c.categoryId === "grooming_indicators")!
+      .confidence;
+
+    const withKeywordMatchAndNewChannel = await scorer.score(
+      baseInput({
+        content: {
+          id: "content-4",
+          title: "add me on snapchat for more",
+          description: null,
+          durationSeconds: 120,
+          creatorName: "Someone",
+        },
+        creatorSignals: { channelAgeDays: 2, subscriberCount: 5, videoCount: 1 },
+      }),
+    );
+    const corroborated = withKeywordMatchAndNewChannel.categories.find((c) => c.categoryId === "grooming_indicators")!;
+    expect(corroborated.confidence).toBeGreaterThan(matchOnlyConfidence);
+    expect(corroborated.score).toBe(
+      withKeywordMatchOnly.categories.find((c) => c.categoryId === "grooming_indicators")!.score,
+    );
+    expect(corroborated.detectedFactors).toContain("Corroborated by a new or low-history channel");
+  });
+
+  it("does not corroborate grooming_indicators from an established channel's signals", async () => {
+    const result = await scorer.score(
+      baseInput({
+        content: {
+          id: "content-5",
+          title: "add me on snapchat for more",
+          description: null,
+          durationSeconds: 120,
+          creatorName: "Someone",
+        },
+        creatorSignals: { channelAgeDays: 2000, subscriberCount: 500_000, videoCount: 400 },
+      }),
+    );
+    expect(result.categories.find((c) => c.categoryId === "grooming_indicators")!.detectedFactors).not.toContain(
+      "Corroborated by a new or low-history channel",
+    );
+  });
 });
 
 describe("riskBandForScore", () => {

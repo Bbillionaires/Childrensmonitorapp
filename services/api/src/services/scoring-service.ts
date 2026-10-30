@@ -1,12 +1,78 @@
 import { prisma, type Prisma } from "@app/database";
 import { RuleBasedSupervisionScorer, riskBandForScore, type RiskBand } from "@app/supervision-score";
+import { createThumbnailAnalyzer } from "@app/ai";
+import type { ScoringInput } from "@app/supervision-score";
 import type { ContentSummary, SupervisionScoreSummary } from "@app/types";
+import type { Env } from "@app/config";
 import { toContentSummary } from "./content-mapper.js";
 import { writeAuditLog } from "./audit.js";
+import { getProviderRegistry } from "./provider-registry.js";
 
 const scorer = new RuleBasedSupervisionScorer();
 
 const RISK_BAND_RANK: Record<RiskBand, number> = { LOW: 3, MODERATE: 2, ELEVATED: 1, HIGH: 0 };
+
+/** Plain `http(s)://` URLs appearing in a description — the only metadata-only signal
+ * `external_link_risk` has (see RuleBasedSupervisionScorer). */
+const URL_PATTERN = /https?:\/\/[^\s"')\]]+/g;
+
+/**
+ * Best-effort Milestone 7 signals layered on top of the Milestone 5 metadata fields — every
+ * one of these is independently optional and wrapped so its own failure never blocks scoring:
+ * a scorer must degrade gracefully when a signal is missing (see SupervisionScorer's doc
+ * comment), and that applies exactly as much to a signal that *used* to be available as to one
+ * that was never implemented yet.
+ */
+async function gatherDeepSignals(
+  env: Env,
+  content: { contentType: string; sourceUrl: string; providerId: string; providerRefId: string; thumbnailUrl: string | null; rawMetadata: Prisma.JsonValue | null },
+): Promise<Pick<ScoringInput, "transcript" | "creatorSignals" | "thumbnailFlags">> {
+  const signals: Pick<ScoringInput, "transcript" | "creatorSignals" | "thumbnailFlags"> = {};
+  if (content.contentType !== "VIDEO") return signals;
+
+  const adapter = getProviderRegistry(env).getById(content.providerId);
+
+  if (adapter?.fetchTranscript) {
+    // fetchTranscript's own contract guarantees it never throws — see youtube-provider.ts —
+    // but a fresh implementation of the interface in the future might not honor that, so this
+    // stays defensive rather than assuming it.
+    try {
+      const transcript = await adapter.fetchTranscript(content.providerRefId);
+      if (transcript) signals.transcript = transcript;
+    } catch {
+      // Degrade silently — a missing transcript is not a scoring failure.
+    }
+  }
+
+  if (adapter?.fetchChannelSignals) {
+    const rawMetadata = content.rawMetadata as { snippet?: { channelId?: string } } | null;
+    const channelId = rawMetadata?.snippet?.channelId;
+    if (channelId) {
+      try {
+        signals.creatorSignals = await adapter.fetchChannelSignals(channelId);
+      } catch {
+        // No API key, channel deleted, transient API error — scoring continues without it.
+      }
+    }
+  }
+
+  if (content.thumbnailUrl) {
+    const analyzer = createThumbnailAnalyzer({
+      openaiApiKey: env.OPENAI_API_KEY,
+      openaiModel: env.OPENAI_MODEL,
+      anthropicApiKey: env.ANTHROPIC_API_KEY,
+    });
+    if (analyzer) {
+      try {
+        signals.thumbnailFlags = await analyzer.analyze(content.thumbnailUrl);
+      } catch {
+        // Neither provider configured, or both failed — scoring continues without it.
+      }
+    }
+  }
+
+  return signals;
+}
 
 /**
  * Computes this content's score and persists it as a new `ScoreVersion` — the content's first
@@ -25,13 +91,16 @@ const RISK_BAND_RANK: Record<RiskBand, number> = { LOW: 3, MODERATE: 2, ELEVATED
  * `raiseSafetyAlertsForRescore` below notifies that parent rather than silently changing what
  * the child can still see.
  */
-export async function ensureContentScored(contentId: string): Promise<void> {
+export async function ensureContentScored(env: Env, contentId: string): Promise<void> {
   const existing = await prisma.supervisionScore.findUnique({
     where: { contentId },
     include: { currentScoreVersion: { include: { categoryResults: true } } },
   });
 
   const content = await prisma.content.findUniqueOrThrow({ where: { id: contentId } });
+  const deepSignals = await gatherDeepSignals(env, content);
+  const externalLinksFound = content.description ? content.description.match(URL_PATTERN) ?? undefined : undefined;
+
   const result = await scorer.score({
     content: {
       id: content.id,
@@ -41,6 +110,8 @@ export async function ensureContentScored(contentId: string): Promise<void> {
       creatorName: content.creatorName,
     },
     providerMadeForKids: content.providerMadeForKids,
+    externalLinksFound,
+    ...deepSignals,
   });
 
   if (existing && scoreUnchanged(existing.currentScoreVersion, result)) return;

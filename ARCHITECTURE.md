@@ -126,27 +126,68 @@ provider "made for kids" flag, transcript if fetched, etc.) `SupervisionScoreRes
 the overall 0–1000 score, a per-category breakdown, confidence, and an explanation.
 
 Milestone 5 implements this with `RuleBasedSupervisionScorer` (`modelVersion:
-"rule-based-v1"`) — transparent, metadata-only: title/description keyword matching per
-category plus `providerMadeForKids` as one input affecting only `age_appropriateness` (never
-adopted as the score itself). Every category starts at a low-confidence neutral baseline and
-is only marked down, with confidence raised accordingly, when a specific signal is found —
-never claiming certainty a title and description alone can't support. It already reads
-`ScoringInput`'s later-milestone fields (`transcript`, `ocrText`, `externalLinksFound`)
-whenever they happen to be populated, so frame/transcript/audio analysis (Milestone 7) plugs
-in as additional `ScoringInput` producers with no scorer or storage change.
+"rule-based-v1"`) — transparent: title/description keyword matching per category plus
+`providerMadeForKids` as one input affecting only `age_appropriateness` (never adopted as the
+score itself). Every category starts at a low-confidence neutral baseline and is only marked
+down, with confidence raised accordingly, when a specific signal is found — never claiming
+certainty a title and description alone can't support. Milestone 7 adds real producers for
+three of `ScoringInput`'s originally-speculative fields — `transcript`, `creatorSignals`,
+`thumbnailFlags` — with no scorer interface or storage change needed; see "Deeper content
+analysis" below for what each one is and isn't.
 
-`services/api/src/services/scoring-service.ts` is the only caller: `ensureContentScored`
-scores a piece of content once, synchronously, right after it's first created (single-URL
-submission, playlist import, or AI discovery) — `Content` is shared globally across every
-family, so this is a property of the content, not of any one parent's relationship to it — and
-persists the result as the content's first `ScoreVersion` (append-only; nothing yet triggers a
-re-score of already-scored content). `attachSupervisionScores` batch-enriches a list of
-`ContentSummary` with their current score in one query, used wherever a parent reviews content
-(Pending Reviews, Approved Content, Discover Content results) plus the dedicated
-`GET /api/parents/scores` route behind the Supervision Scores dashboard page — every piece of
-content approved for at least one child, worst-score-first, with a "Why this score?" expand
-showing the full category breakdown. The storage/versioning model (`ScoreVersion`) does not
-change when the underlying model does — only `signalsUsed` grows.
+`services/api/src/services/scoring-service.ts` is the only caller: `ensureContentScored` scores
+a piece of content synchronously right after it's created or its metadata is refreshed
+(single-URL submission, playlist import, AI discovery, or a later re-import/re-submission) —
+`Content` is shared globally across every family, so this is a property of the content, not of
+any one parent's relationship to it. It always re-runs the scorer and compares the result to
+what's on file; an unchanged result is a no-op, a changed one appends a new `ScoreVersion`
+(append-only) and, if the change is worse for a child who currently has the content approved,
+raises a `SafetyAlert` (see "Viewing history, safety alerts, and parent reporting" below).
+`attachSupervisionScores` batch-enriches a list of `ContentSummary` with their current score in
+one query, used wherever a parent reviews content (Pending Reviews, Approved Content, Discover
+Content results) plus the dedicated `GET /api/parents/scores` route behind the Supervision
+Scores dashboard page — every piece of content approved for at least one child,
+worst-score-first, with a "Why this score?" expand showing the full category breakdown. The
+storage/versioning model (`ScoreVersion`) does not change when the underlying model does —
+only `signalsUsed` grows.
+
+## Deeper content analysis (Milestone 7)
+
+PRODUCT_REQUIREMENTS.md names this milestone "transcript/audio/frame/OCR." Audio transcription
+and frame sampling/OCR both require downloading the video itself — no official API provides
+either — so this project, which uses only official APIs everywhere else, does not build them;
+doing so would need per-video OAuth consent from each video's own owner or a licensed
+transcription/vision vendor, both future operator decisions, not an engineering gap. What *is*
+built:
+
+- **Creator/channel signals** (`YouTubeContentProvider.fetchChannelSignals`, official
+  `channels.list`): channel age, subscriber count, video count. A weak, corroborating signal
+  only — `RuleBasedSupervisionScorer` never independently penalizes a new channel (most are
+  innocuous); it only raises confidence on a `grooming_indicators` match the text already
+  triggered, when the channel is also new/low-history.
+- **External-link analysis**: a plain regex over the already-fetched description text, feeding
+  the `external_link_risk` category — no new call.
+- **Thumbnail image analysis** (`packages/ai`'s `ThumbnailAnalyzer`): the exact OpenAI-primary/
+  Claude-fallback dual-provider shape as the discovery translator (`OpenAIThumbnailAnalyzer`/
+  `ClaudeThumbnailAnalyzer`/`FallbackThumbnailAnalyzer`/`createThumbnailAnalyzer`), classifying
+  the provider's own public thumbnail URL — the same image this app already displays, never a
+  scrape — against the fixed 20-category vocabulary.
+- **Transcript fetching** (`YouTubeContentProvider.fetchTranscript`) — the **one deliberate
+  exception** to "official APIs only" in this codebase. YouTube's Data API only allows
+  downloading a caption track under OAuth consent from the video's own owner, which doesn't
+  scale to arbitrary third-party content, so this instead reads the caption track list
+  YouTube's own web player embeds in the public watch page (the same data the player itself
+  uses, fetched the way a browser would — no video/audio download). It is not a documented or
+  supported API and can break or be blocked without notice (verified live: a real call hit a
+  genuine YouTube `429` in this environment). Per its contract, it **must never throw** — every
+  failure degrades to `null` so scoring proceeds on whatever else succeeded.
+
+All three new signals are fetched best-effort inside `scoring-service.ts`'s
+`gatherDeepSignals`, each in its own try/catch — one failing never blocks the others or
+metadata-only scoring itself. Submission endpoints (`POST /content/submit`,
+`POST /playlists/import`) carry a modest new rate limit for the same reason discovery does: a
+never-before-seen video can now trigger a real vision-model call, though cost is still bounded
+per unique content (a re-submission is a cache hit), not per submission request.
 
 ## AI discovery
 

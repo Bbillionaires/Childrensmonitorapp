@@ -80,7 +80,7 @@ including what the credential is for, where to obtain it, and which environment 
 
 ## Status
 
-Milestones 1–6 are implemented: monorepo scaffold, full domain database schema, parent
+Milestones 1–7 are implemented: monorepo scaffold, full domain database schema, parent
 authentication, parent dashboard, child profile management, URL and playlist import (a real
 YouTube adapter plus a website-whitelist fallback — no scraping anywhere), the parent
 approval pipeline (bulk select/approve/reject), the child-facing experience (device-handoff
@@ -94,7 +94,13 @@ a parent — Keep Approved, Remove, or Review Details — when approved content'
 information genuinely changes, and a "Report this content" action on every piece of content).
 Discovery runs on a dual-provider setup: OpenAI as the cost-efficient primary translator (this
 feature is funded by one shared, operator-paid key, not bring-your-own-key, so cost per call
-matters), with Claude as a fallback for calls OpenAI's provider fails on. YouTube search, both
-AI providers, the Supervision Score engine, and the Milestone 6 features are all verified
-end-to-end in a real browser session. See [IMPLEMENTATION_PLAN.md](./IMPLEMENTATION_PLAN.md)
-for what's next.
+matters), with Claude as a fallback for calls OpenAI's provider fails on. The Supervision Score
+engine now also draws on thumbnail image analysis (same dual-provider setup), official
+YouTube channel signals, external-link detection, and — as the one deliberate exception to this
+project's "official APIs only" rule — a transcript fetched from YouTube's public watch page,
+isolated so its failure (verified live against a real YouTube rate limit) never blocks scoring.
+Audio transcription and frame sampling/OCR remain unbuilt: both would require downloading the
+video itself, which this project does not do without either per-video creator consent or a
+licensed vendor. YouTube search, both AI providers, the Supervision Score engine (including its
+Milestone 7 signals), and the Milestone 6 features are all verified end-to-end against live
+APIs. See [IMPLEMENTATION_PLAN.md](./IMPLEMENTATION_PLAN.md) for what's next.

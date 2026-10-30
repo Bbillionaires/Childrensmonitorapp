@@ -418,7 +418,89 @@ real one live would require either a second live submission of content whose pro
 title actually changed, or a manual DB edit — both less informative than the deterministic
 test.
 
-## Milestones 7–10
+## Milestone 7 — exact implementation plan (done, partial scope — see below)
+
+PRODUCT_REQUIREMENTS.md names this milestone "Advanced AI analysis (transcript/audio/frame/
+OCR)." Before building, we hit a real constraint: YouTube's Data API only allows downloading a
+caption track under OAuth consent from the video's own owner — it doesn't scale to arbitrary
+third-party videos — and there is no official API to pull audio or video frames without
+downloading the video itself, which this project has avoided everywhere else (see "never
+scrape, only official APIs" throughout Milestones 2–4). Asked how to handle the gap, the
+decision was: build everything officially feasible, and additionally build transcript fetching
+via a documented, deliberate exception — never audio transcription or frame sampling/OCR,
+which have no non-scraping path at all. No new external credentials — everything below reuses
+`YOUTUBE_API_KEY`/`OPENAI_API_KEY`/`ANTHROPIC_API_KEY`.
+
+1. **Creator/channel signals (official)** — `YouTubeContentProvider.fetchChannelSignals`
+   (`packages/content-providers`) calls the official `channels.list` endpoint (same API key as
+   everything else) for channel age, subscriber count, and video count. Deliberately a weak,
+   corroborating signal only: `RuleBasedSupervisionScorer` never independently penalizes a
+   brand-new channel (most are completely innocuous) — it only raises confidence on a
+   `grooming_indicators` match the text already triggered, when the channel is also new/
+   low-history. Verified live: a real `channels.list` call for Rick Astley's channel correctly
+   found no corroboration needed (no grooming match existed to corroborate).
+2. **External-link analysis (official, free)** — `scoring-service.ts` regexes `http(s)://` URLs
+   out of the content's own description (already-fetched metadata, no new call) and feeds them
+   to the already-built `external_link_risk` category from Milestone 5. Verified live: a real
+   video description with 11 links correctly scored `external_link_risk` at 0/100.
+3. **Thumbnail image analysis (official)** — a new `ThumbnailAnalyzer` interface in
+   `packages/ai`, with the exact OpenAI-primary/Claude-fallback dual-provider architecture from
+   Milestone 4's discovery translator (`OpenAIThumbnailAnalyzer`/`ClaudeThumbnailAnalyzer`/
+   `FallbackThumbnailAnalyzer`/`createThumbnailAnalyzer`) — vision-capable structured output
+   classifying the thumbnail against the fixed 20-category vocabulary. Zero ToS risk: the
+   thumbnail URL is the same public, display-intended image this app already renders in the UI,
+   never a scrape. Only run once per distinct piece of content (same dedup as every other score
+   input), so cost is bounded the same way Milestone 4's discovery rate limit was designed
+   around. Verified live: a real OpenAI vision call against the submitted video's real
+   thumbnail correctly flagged nothing (a benign thumbnail).
+4. **Transcript fetching (the one deliberate exception)** — `YouTubeContentProvider.
+   fetchTranscript` reads the caption track list YouTube's own web player embeds in the public
+   watch page (the same data the player itself uses, fetched the same way a browser would — no
+   video/audio download, no auth bypass), then fetches the chosen track's timed-text URL. This
+   is **not** a documented or supported API and could break or be blocked without notice —
+   unlike every other integration in this project. Per the user's explicit requirement, it is
+   isolated and **must never throw**: every failure mode (no captions, network error, YouTube
+   blocking/rate-limiting the request, a changed page structure) resolves to `null`, so scoring
+   always proceeds on whatever other signals succeeded. **Verified live, including the failure
+   path**: a real transcript fetch against a real, heavily-captioned video returned a genuine
+   `429` from YouTube in this environment — exactly the kind of breakage this method is
+   documented to be exposed to — and scoring completed successfully anyway (943/1000, built
+   from every other signal), with `transcript` correctly absent from `signalsUsed`. This is the
+   honest, real-world proof of the fallback requirement, not just a mocked test case (the
+   mocked success/failure paths are also covered in `deep-signals.test.ts` and
+   `youtube-provider.test.ts` for determinism).
+5. `ScoringInput` gained `creatorSignals` and `thumbnailFlags` (alongside the already-scaffolded
+   `transcript`/`ocrText`/`externalLinksFound`); `RuleBasedSupervisionScorer` treats a
+   thumbnail flag like a keyword match on whichever category it names. `scoring-service.ts`'s
+   `gatherDeepSignals` fetches all three new signals best-effort, each in its own try/catch, so
+   one failing (transcript, here) never blocks the others (channel signals, thumbnail
+   analysis) or metadata-only scoring itself.
+6. A modest new rate limit on `POST /content/submit` (60/hour) and `POST /playlists/import`
+   (20/hour, tighter since one import can newly-score many videos in a single request) — cost
+   is bounded per unique content (a re-submission is a cache hit), but a never-before-seen video
+   can now trigger a real vision-model call, same cost-safety reasoning as discovery's limit.
+7. Tests: 9 new unit tests for `fetchChannelSignals`/`fetchTranscript` (success, no-captions,
+   malformed-HTML, network failure, missing-API-key paths — `youtube-provider.test.ts`), 15 new
+   unit tests for the thumbnail analyzer classes + fallback + factory (`packages/ai`), 4 new
+   scorer unit tests for thumbnail-flag and creator-signal-corroboration behavior
+   (`packages/supervision-score`), and 8 new API integration tests proving graceful degradation
+   end-to-end plus the positive path for each signal (`deep-signals.test.ts`,
+   `deep-signals-channel-signals.test.ts` — split into its own file because
+   `getProviderRegistry`'s module-level singleton caches its API key at first construction, so
+   a test needing `YOUTUBE_API_KEY` configured can't share a file with one that needs it
+   unconfigured).
+
+**Status: done for everything officially feasible, plus transcript fetching as the one
+explicit, documented exception** — see point 4 above for why, and for the real (not just
+mocked) proof that it degrades safely when it breaks. **Audio transcription, frame sampling,
+and OCR remain out of scope**, with no non-scraping path identified: audio/frame extraction
+both require downloading the video itself, which this project will not do. Building these
+would need either per-video OAuth consent from each video's own channel owner (impractical at
+the scale of arbitrary third-party content) or a licensed, paid transcription/vision vendor the
+operator would need to contract and legally clear — both are a future decision, not an
+engineering gap closeable with the current credentials.
+
+## Milestones 8–10
 
 Unchanged from PRODUCT_REQUIREMENTS.md's list; each will get this same treatment (a short
 plan reviewed before implementation, external-credential stop points called out explicitly)

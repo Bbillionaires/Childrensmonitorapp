@@ -100,14 +100,33 @@ when a specific signal is found — it never claims certainty it doesn't have, a
 category result carries a confidence below 1.0 unless corroborated by a strong explicit
 signal (e.g. the provider's own age restriction flag).
 
-### Future analysis inputs (interfaces exist now, implementations land in Milestone 7)
+### Milestone 7: deeper analysis — what's real, what's still a gap
 
-Metadata analysis (M5) → thumbnail image analysis → transcript analysis → audio
-transcription → sampled video-frame analysis → OCR of on-screen text → external-link
-analysis → creator/channel history signals → validated parent reports → historical
-moderation signals from the provider. Each becomes an additional producer of `ScoringInput`
-fields; the scorer interface and the storage model do not change when new inputs are added,
-only `signalsUsed` grows.
+Of PRODUCT_REQUIREMENTS.md's "transcript/audio/frame/OCR," only transcript analysis is built,
+and via a documented exception rather than an official API (see IMPLEMENTATION_PLAN.md and
+ARCHITECTURE.md's "Deeper content analysis" section for exactly what it does and why it must
+never throw). Audio transcription and frame sampling/OCR have no non-scraping path — both would
+require downloading the video itself — so they remain unbuilt pending either per-video OAuth
+consent from each video's own channel owner or a licensed vendor, not an engineering gap.
+
+What Milestone 7 does add, each an independent, best-effort `ScoringInput` producer that
+degrades to simply absent (never fabricated) on its own failure:
+
+- **Thumbnail image analysis** — an AI vision call (OpenAI primary, Claude fallback, same
+  dual-provider shape as AI discovery) against the provider's own public thumbnail URL.
+- **Transcript analysis** — the one deliberate exception above; feeds the same keyword-matching
+  path as title/description.
+- **External-link analysis** — a regex over the already-fetched description text.
+- **Creator/channel history signals** — the official `channels.list` endpoint; only ever
+  corroborates (raises confidence on) an already-triggered `grooming_indicators` match for a
+  new/low-history channel, never an independent penalty for being new.
+
+Not yet built: **OCR of on-screen text** and **validated parent reports feeding
+recalculation** (Milestone 6 built report *submission*; there is no moderation/validation
+workflow yet to act on a validated one) and **historical moderation signals from the
+provider**. Each remaining item becomes an additional producer of `ScoringInput` fields
+whenever it's built; the scorer interface and the storage model do not change when a new input
+is added, only `signalsUsed` grows.
 
 ## Versioning (non-negotiable)
 

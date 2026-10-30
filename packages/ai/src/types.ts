@@ -20,3 +20,15 @@ export interface DiscoveryContext {
 export interface DiscoveryTranslator {
   translate(brief: string, context: DiscoveryContext): Promise<DiscoveryQuery>;
 }
+
+/**
+ * Classifies a thumbnail image against the fixed safety-category vocabulary — one additional
+ * `ScoringInput` producer for `packages/supervision-score`, same "never the verdict itself,
+ * just one input" treatment as every other signal (see SUPERVISION_SCORE.md). `services/api`
+ * is the only caller.
+ */
+export interface ThumbnailAnalyzer {
+  /** `imageUrl` is the provider's own public thumbnail URL — never a scraped or re-hosted
+   * image. Returns the (possibly empty) list of safety categories visibly depicted. */
+  analyze(imageUrl: string): Promise<string[]>;
+}
