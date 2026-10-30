@@ -28,7 +28,8 @@ proprietary **Supervision Score** safety-rating engine.
 ```
 /apps
   /web            Next.js app: parent dashboard + child experience (web/PWA, mobile-responsive)
-  /mobile         React Native (Expo) app — scaffolded, built out in Milestone 8
+  /mobile         React Native (Expo) scaffold (Milestone 8) — UI-only stubs, not wired to
+                    the API; see apps/mobile/README.md for what's real vs. stubbed
   /tv-future      Placeholder for smart-TV clients (Milestone 9)
 
 /packages
@@ -80,7 +81,7 @@ including what the credential is for, where to obtain it, and which environment 
 
 ## Status
 
-Milestones 1–7 are implemented: monorepo scaffold, full domain database schema, parent
+Milestones 1–7 are implemented, and Milestone 8 is split (see below): monorepo scaffold, full domain database schema, parent
 authentication, parent dashboard, child profile management, URL and playlist import (a real
 YouTube adapter plus a website-whitelist fallback — no scraping anywhere), the parent
 approval pipeline (bulk select/approve/reject), the child-facing experience (device-handoff
@@ -103,4 +104,14 @@ Audio transcription and frame sampling/OCR remain unbuilt: both would require do
 video itself, which this project does not do without either per-video creator consent or a
 licensed vendor. YouTube search, both AI providers, the Supervision Score engine (including its
 Milestone 7 signals), and the Milestone 6 features are all verified end-to-end against live
-APIs. See [IMPLEMENTATION_PLAN.md](./IMPLEMENTATION_PLAN.md) for what's next.
+APIs. Milestone 8 is split: the web app itself is now genuinely mobile-first — a responsive
+dashboard nav, an installable PWA (manifest + real icons, deliberately no service worker, to
+protect the "approval revocation takes effect immediately" invariant), and a touch-friendly
+child player — and this was verified live with Playwright at phone and tablet viewport sizes
+against a real seeded backend, not just by typechecking. A native iOS/Android app
+(`apps/mobile`) is scaffolded with real, current Expo/React Native versions and UI-only stub
+screens, but is explicitly **unverified**: this environment has no simulator or device to
+actually run it on — see [apps/mobile/README.md](./apps/mobile/README.md) for exactly what's
+real, what's stubbed, and the native-auth design decision that was deliberately left open
+rather than made silently. See [IMPLEMENTATION_PLAN.md](./IMPLEMENTATION_PLAN.md) for what's
+next.

@@ -500,7 +500,79 @@ the scale of arbitrary third-party content) or a licensed, paid transcription/vi
 operator would need to contract and legally clear — both are a future decision, not an
 engineering gap closeable with the current credentials.
 
-## Milestones 8–10
+## Milestone 8 — exact implementation plan (done, split scope — see below)
+
+PRODUCT_REQUIREMENTS.md names this milestone "Native mobile apps (iOS/Android)." Before
+building, we hit a real constraint: this environment has no Xcode, no Android Studio, no
+simulator, and no physical device — nothing here can actually run or verify a native app build.
+Asked how to proceed (most kids watch on phones/tablets today, not desktops), the decision was:
+build both. Make the web app itself fully mobile-first *now* — that's the thing families can
+actually use on a phone or tablet today, in a normal browser, with zero app-store friction — and
+additionally scaffold the native Expo/React Native project structure so a real native app has
+somewhere to be built out later, honestly labeled as unverified rather than claimed working.
+
+**Part A — the web app, made genuinely mobile-first:**
+
+1. The parent dashboard's sidebar nav (`apps/web/src/app/(dashboard)/layout.tsx`) was
+   `hidden ... sm:block` with **no mobile alternative at all** — a real, severe bug for any
+   parent on a phone (zero way to navigate between dashboard sections below 640px). Fixed with
+   a standard hamburger/drawer pattern that reuses the existing `NAV_ITEMS` data and closes
+   itself on navigation; the desktop sidebar is untouched above `sm:`.
+2. PWA installability: a `manifest.webmanifest`, real generated icon assets (192/512/maskable/
+   apple-touch, rendered via the pre-installed headless Chromium as an ad-hoc rasterizer — no
+   image-editing dependency needed), and `viewport`/`appleWebApp` metadata wired into
+   `app/layout.tsx`. **Deliberately no service worker** — any caching here would risk
+   undermining "a parent's approval revocation takes effect immediately, even mid-session," an
+   already-tested Milestone 3 security invariant, and that's a tradeoff worth being explicit
+   about rather than silently shipping offline support that could get it wrong.
+3. The child player's action buttons (`apps/web/src/app/child/play/[contentId]/page.tsx`) used
+   to wrap awkwardly (`flex flex-wrap`); now stack full-width on phones and go horizontal from
+   `sm:` up, with the primary "Next Approved Video" action ordered first for thumb reach.
+4. **Verified live, not just by typecheck** — a local Postgres instance, a real registered
+   parent account, a real child profile, and real approved content were seeded, then driven
+   through actual login/navigation/playback flows via Playwright at phone (390×844) and tablet
+   (768×1024) viewport sizes: the hamburger drawer opening/closing, the dashboard sidebar
+   appearing correctly at tablet width, and the child player's buttons stacking correctly on
+   phone and sitting horizontally on tablet. All 148 existing tests plus lint and typecheck
+   passed clean against the changes.
+
+**Part B — native app scaffold (`apps/mobile`), explicitly unverified:**
+
+1. A real, current (checked against the npm registry, not memorized/placeholder) Expo `~58.0.21`
+   + React Native `0.88.1` + TypeScript project, added as a proper `pnpm` workspace member and
+   depending on `@app/types` for shared Zod/TypeScript shapes.
+2. Hand-rolled screen switching in `App.tsx` instead of a navigation library — every dependency
+   added here is something nobody has verified actually works in this environment, so the
+   scaffold stays as small as possible. Three UI-only stub screens (`LoginScreen`,
+   `LibraryScreen`, `PlayerScreen` using `react-native-webview` for a YouTube embed, the same
+   "official URL, no native SDK" approach as the web app's `<iframe>`), each explicitly
+   commented as not wired to the real API.
+3. Two gaps are called out honestly in `apps/mobile/README.md` rather than papered over:
+   **native auth** (the web app's cookie-based sessions don't translate to React Native as-is;
+   a real design — most likely issuing bearer tokens to native clients alongside, not instead
+   of, the existing cookie sessions — needs its own explicit discussion, not a silent decision
+   made while "just scaffolding"), and **Metro + pnpm workspace resolution** (`@app/types` ships
+   raw TypeScript source with no build step; a `metro.config.js` sets up the standard Expo
+   monorepo pattern, but whether Metro actually transforms that one workspace package from
+   `node_modules` has not been run end-to-end — there's no device/simulator here to run it on).
+4. `pnpm install` from the repo root resolves this new workspace member cleanly, and
+   `pnpm --filter @app/mobile typecheck` passes — both actually verified here. Adding it also
+   surfaced and fixed a real, pre-existing-shape pnpm/TypeScript monorepo bug: introducing a
+   second major React version (19, for Expo) into the workspace caused pnpm's internal
+   `.pnpm/node_modules` phantom-hoist slot for `@types/react` to arbitrarily resolve to v19 for
+   files that reference it ambiently rather than via explicit import (`apps/web/src/app/
+   layout.tsx`'s `children: React.ReactNode`), producing a real type error unrelated to any
+   logic change. Fixed by switching that one annotation to an explicit
+   `import type { ReactNode } from "react"` rather than fighting pnpm's hoisting behavior,
+   which full-suite testing proved other packages (`@prisma/client`'s generated types,
+   Fastify's plugin-augmented `reply.setCookie`) legitimately depend on.
+
+**Status: done for the web app (built, live-verified, shipped) and done for the native scaffold
+as a scaffold** (real versions, clean install, clean typecheck) — **not done, and not
+claimed to be,** for an actually running/testable native app, which needs a real machine with
+Xcode and/or Android Studio that does not exist in this environment.
+
+## Milestones 9–10
 
 Unchanged from PRODUCT_REQUIREMENTS.md's list; each will get this same treatment (a short
 plan reviewed before implementation, external-credential stop points called out explicitly)

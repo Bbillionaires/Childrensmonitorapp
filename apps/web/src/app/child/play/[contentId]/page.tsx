@@ -105,18 +105,18 @@ export default function ChildPlayPage() {
         </div>
       )}
 
-      <div className="flex flex-wrap gap-2">
-        {playback.contentType === "VIDEO" && (
-          <button className="btn-secondary" onClick={() => setReplayNonce((n) => n + 1)}>
-            ↻ Replay
-          </button>
-        )}
+      <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
         {playback.contentType === "VIDEO" && playback.nextContentId && (
           <button
-            className="btn-primary"
+            className="btn-primary order-first sm:order-none"
             onClick={() => router.push(`/child/play/${playback.nextContentId}?playlistId=${playlistId}`)}
           >
             Next Approved Video ▶
+          </button>
+        )}
+        {playback.contentType === "VIDEO" && (
+          <button className="btn-secondary" onClick={() => setReplayNonce((n) => n + 1)}>
+            ↻ Replay
           </button>
         )}
         <Link href={backHref} className="btn-secondary">

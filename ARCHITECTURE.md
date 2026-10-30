@@ -16,7 +16,9 @@ bypass.
   /web            Next.js 14 (App Router). Two route groups sharing one deployable:
                     (parent)  — dashboard, requires parent session
                     (child)   — player/library UI, requires child session
-  /mobile         Expo/React Native scaffold — consumes the same REST API (Milestone 8)
+  /mobile         Expo/React Native scaffold (Milestone 8) — hand-rolled screen switching,
+                    UI-only stub screens, intended to consume the same REST API. Unverified:
+                    no simulator/device in this environment — see apps/mobile/README.md.
   /tv-future      Placeholder — same API, thin client (Milestone 9)
 
 /packages
