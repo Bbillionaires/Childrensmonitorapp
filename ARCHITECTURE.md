@@ -13,13 +13,18 @@ bypass.
 
 ```
 /apps
-  /web            Next.js 14 (App Router). Two route groups sharing one deployable:
+  /web            Next.js 14 (App Router), one deployable with three surfaces:
                     (parent)  — dashboard, requires parent session
-                    (child)   — player/library UI, requires child session
+                    (child)   — player/library UI, requires child session, mobile-first (PWA)
+                    /tv       — the same child session/API, a 10-foot UI navigated by a TV
+                                remote's D-pad instead of touch/mouse (Milestone 9) — see
+                                apps/web/src/lib/tv-nav.ts
   /mobile         Expo/React Native scaffold (Milestone 8) — hand-rolled screen switching,
                     UI-only stub screens, intended to consume the same REST API. Unverified:
                     no simulator/device in this environment — see apps/mobile/README.md.
-  /tv-future      Placeholder — same API, thin client (Milestone 9)
+  /tv             Expo/react-native-tvos scaffold (Milestone 9) — same posture as /mobile:
+                    real versions, hand-rolled TVFocusGuideView-based focus, unverified (no
+                    Apple TV/Android TV simulator here) — see apps/tv/README.md
 
 /packages
   /types                Zod schemas + inferred TS types shared by API and clients.

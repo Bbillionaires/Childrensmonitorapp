@@ -1,0 +1,22 @@
+{
+  "expo": {
+    "name": "Family Safety TV",
+    "slug": "family-safety-tv",
+    "version": "0.1.0",
+    "orientation": "landscape",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "backgroundColor": "#020617"
+    },
+    "ios": {
+      "bundleIdentifier": "com.familysafety.tv",
+      "supportsTablet": false
+    },
+    "android": {
+      "package": "com.familysafety.tv"
+    },
+    "plugins": ["@react-native-tvos/config-tv"]
+  }
+}

@@ -27,10 +27,12 @@ proprietary **Supervision Score** safety-rating engine.
 
 ```
 /apps
-  /web            Next.js app: parent dashboard + child experience (web/PWA, mobile-responsive)
+  /web            Next.js app: parent dashboard + child experience (web/PWA, mobile-responsive,
+                    plus a TV-remote-navigable /tv surface, Milestone 9)
   /mobile         React Native (Expo) scaffold (Milestone 8) — UI-only stubs, not wired to
                     the API; see apps/mobile/README.md for what's real vs. stubbed
-  /tv-future      Placeholder for smart-TV clients (Milestone 9)
+  /tv             Expo/react-native-tvos scaffold (Milestone 9) — UI-only stubs, not wired to
+                    the API; see apps/tv/README.md for what's real vs. stubbed
 
 /packages
   /types                Shared TypeScript types & zod schemas (API contracts)
@@ -81,7 +83,7 @@ including what the credential is for, where to obtain it, and which environment 
 
 ## Status
 
-Milestones 1–7 are implemented, and Milestone 8 is split (see below): monorepo scaffold, full domain database schema, parent
+Milestones 1–7 are implemented, and Milestones 8–9 are each split (see below): monorepo scaffold, full domain database schema, parent
 authentication, parent dashboard, child profile management, URL and playlist import (a real
 YouTube adapter plus a website-whitelist fallback — no scraping anywhere), the parent
 approval pipeline (bulk select/approve/reject), the child-facing experience (device-handoff
@@ -113,5 +115,19 @@ against a real seeded backend, not just by typechecking. A native iOS/Android ap
 screens, but is explicitly **unverified**: this environment has no simulator or device to
 actually run it on — see [apps/mobile/README.md](./apps/mobile/README.md) for exactly what's
 real, what's stubbed, and the native-auth design decision that was deliberately left open
-rather than made silently. See [IMPLEMENTATION_PLAN.md](./IMPLEMENTATION_PLAN.md) for what's
+rather than made silently. Milestone 9 follows the same split: `apps/web` gained a `/tv` surface
+reusing the exact same child session/library/playback backend, but navigated entirely by a TV
+remote's D-pad (arrow keys + OK + Back) instead of touch or a mouse — a hand-rolled spatial
+focus-navigation hook, a numeric on-screen keypad for exiting to parent mode (a remote has no
+reliable text input), and per-page auto-focus so a user always lands somewhere useful after
+navigating. This was verified live, driven purely by keyboard events, end-to-end against a real
+seeded backend at a 1920×1080 viewport — including a genuine usability bug this caught and fixed
+(every page navigation was dropping focus onto the header's account button instead of the page's
+own content). A native TV app (`apps/tv`) is scaffolded the same way `apps/mobile` was: real,
+current `react-native-tvos` (the standard way to target both Apple tvOS and Android TV/Fire TV
+from one React codebase) with the same native-auth gap deliberately left open, and explicitly
+**unverified** — no Apple TV/Android TV simulator exists here. Roku is deliberately **not**
+scaffolded: BrightScript shares zero code with this stack, and building it would be a separate,
+from-scratch project — see [apps/tv/README.md](./apps/tv/README.md). See
+[IMPLEMENTATION_PLAN.md](./IMPLEMENTATION_PLAN.md) for what's
 next.

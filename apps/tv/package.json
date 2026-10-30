@@ -1,0 +1,25 @@
+{
+  "name": "@app/tv",
+  "version": "0.1.0",
+  "private": true,
+  "main": "index.ts",
+  "scripts": {
+    "start": "EXPO_TV=1 expo start",
+    "ios": "EXPO_TV=1 expo start --ios",
+    "android": "EXPO_TV=1 expo start --android",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@app/types": "workspace:*",
+    "expo": "~58.0.21",
+    "expo-status-bar": "~58.0.4",
+    "react": "19.3.0",
+    "react-native": "npm:react-native-tvos@0.88.0-0",
+    "react-native-webview": "14.0.1"
+  },
+  "devDependencies": {
+    "@react-native-tvos/config-tv": "0.1.7",
+    "@types/react": "~19.3.0",
+    "typescript": "~6.0.3"
+  }
+}

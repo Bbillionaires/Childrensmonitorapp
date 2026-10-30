@@ -572,8 +572,81 @@ as a scaffold** (real versions, clean install, clean typecheck) — **not done, 
 claimed to be,** for an actually running/testable native app, which needs a real machine with
 Xcode and/or Android Studio that does not exist in this environment.
 
-## Milestones 9–10
+## Milestone 9 — exact implementation plan (done, split scope — see below)
 
-Unchanged from PRODUCT_REQUIREMENTS.md's list; each will get this same treatment (a short
-plan reviewed before implementation, external-credential stop points called out explicitly)
-when started, rather than being built ahead of the current milestone.
+PRODUCT_REQUIREMENTS.md names this milestone "TV applications." Same constraint as Milestone 8:
+this environment has no Roku device, no Apple TV simulator, no Android TV emulator, and no
+Tizen/webOS SDK — nothing native-TV can actually be run or verified here. Asked how to proceed,
+the decision (consistent with Milestone 8's "build both") was: build a genuinely working,
+live-verified TV-remote-navigable experience inside the existing web app now, and additionally
+scaffold a native TV app honestly labeled as unverified.
+
+**Part A — `/tv`, a real 10-foot UI inside `apps/web`:**
+
+1. Smart TV browsers (Tizen, webOS, Android TV) are standard web engines — a TV remote's D-pad
+   delivers real `ArrowUp`/`ArrowDown`/`ArrowLeft`/`ArrowRight` `KeyboardEvent`s, and its OK
+   button activates whatever's focused exactly like a real `<button>`/`<a>` click. That makes a
+   web-based TV experience something this environment actually can build and test, unlike a
+   native TV app.
+2. `apps/web/src/lib/tv-nav.ts`: a hand-rolled spatial-navigation hook
+   (`useTvSpatialNav`) that moves focus to the nearest `[data-tv-focusable]` element in the
+   pressed direction using real element positions (not a hardcoded grid shape), a back-key hook
+   (`useTvBackKey`, Backspace/Escape → `router.back()`), and an auto-focus hook
+   (`useTvAutoFocus`) that focuses a page's own first focusable element once its content loads.
+   Deliberately does not reimplement Enter/Space activation — real `<button>`/`<a>` elements
+   already do that natively, which is also what a real TV browser relies on.
+3. `apps/web/src/app/tv/{page,playlists/[playlistId]/page,play/[contentId]/page}.tsx`: the same
+   child session/library/playback backend as `/child`, rendered as a dark, large-text, large-card
+   10-foot UI. `apps/web/src/components/tv-exit-keypad.tsx` is a TV-specific exit-to-parent flow
+   — a D-pad-navigable on-screen numeric keypad, since a remote has no reliable text input,
+   calling the same `/api/child/exit-to-parent` endpoint apps/web's phone/desktop popover does.
+4. **Verified live, not just by typecheck** — a real parent account, child profile, and approved
+   content/playlist were seeded, then the entire flow (home → playlist → video → back → the
+   numeric-keypad exit-to-parent, ending in a real, successful API call) was driven **purely by
+   keyboard events** (no mouse/click) via Playwright at a 1920×1080 viewport. This caught two
+   real bugs before they shipped: the video player at `aspect-video` and full TV width rendered
+   as tall as the whole 1080p screen by itself, pushing the action buttons off-screen with no
+   way to scroll them into view by remote (fixed with a fixed viewport-relative height instead);
+   and every page navigation reset focus to the header's "Parent sign-in" button (always first
+   in DOM order) instead of that page's own content (fixed with `useTvAutoFocus`, called once
+   each page's real content renders). Full typecheck/lint/148-test suite also passed clean.
+
+**Part B — native TV app scaffold (`apps/tv`), explicitly unverified:**
+
+1. A real, current (checked against the npm registry) Expo `~58.0.21` +
+   [`react-native-tvos`](https://github.com/react-native-community/react-native-tvos) `0.88.0-0`
+   (installed via npm's package-alias syntax, `"react-native": "npm:react-native-tvos@..."`,
+   the documented way existing react-native-tvos projects set this up) +
+   `@react-native-tvos/config-tv` `0.1.7` (the companion Expo config plugin, maintained by Expo
+   core contributors) project. This is the real, standard way to target **both** Apple tvOS and
+   Android TV/Fire TV from **one** codebase — unlike phone platforms, TV platforms don't share a
+   runtime, so this is a separate app from `apps/mobile`, not an extension of it.
+2. Same hand-rolled-navigation philosophy as `apps/mobile`: no extra dependencies beyond what's
+   needed. Three UI-only stub screens using `react-native-tvos`'s real focus-engine primitives
+   (`TVFocusGuideView`, `hasTVPreferredFocus`, `onFocus`/`onBlur` focus-ring styling) — the
+   native equivalent of what Part A had to hand-build in plain DOM/keyboard terms, except here
+   the platform's own focus engine does the spatial-navigation work.
+3. `pnpm install` resolves cleanly with zero peer-dependency warnings, `node_modules/react-native`
+   genuinely resolves to the `react-native-tvos` package contents, and
+   `pnpm --filter @app/tv typecheck` passes — which only works because `hasTVPreferredFocus`/
+   `TVFocusGuideView` type-check against the TV fork's own type definitions, not stock
+   `react-native`'s. All three actually verified here; running the app was not.
+4. The same native-auth design gap as `apps/mobile` is called out rather than silently decided
+   (see `apps/tv/README.md`).
+5. **Roku is deliberately not scaffolded.** Roku channels are built in BrightScript, a
+   proprietary language/runtime with zero code overlap with this project's TypeScript/React
+   stack — scaffolding it honestly would mean writing an entire second application from scratch
+   in an unrelated language, which is its own standalone engineering decision (effort vs. this
+   product's actual audience on Roku), not an extension of the work done here.
+
+**Status: done for the web TV experience (built, live-verified, shipped) and done for the native
+scaffold as a scaffold** (real versions, clean install, clean typecheck) — **not done, and not
+claimed to be,** for an actually running/testable native TV app (needs a real Apple TV/Android TV
+simulator or device) or for Roku at all (a from-scratch, separate-language project, out of scope
+until explicitly requested).
+
+## Milestone 10
+
+Unchanged from PRODUCT_REQUIREMENTS.md's list; will get this same treatment (a short plan
+reviewed before implementation, external-credential stop points called out explicitly) when
+started, rather than being built ahead of the current milestone.
