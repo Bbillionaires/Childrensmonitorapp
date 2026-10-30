@@ -164,6 +164,34 @@ enforce.
 - id, searchRequestId, contentId, matchReason (text), rank, presentedAt, parentDecision
   (enum: PENDING, APPROVED, REJECTED, nullable until acted on)
 
+## Billing (Milestone 10)
+
+Two independent subscriptions, kept in sync by Stripe webhook events rather than trusted
+client state: a parent's own access to this app, and a business's access to the commercial
+Supervision Score API (see COMMERCIAL_API.md). Prices are Stripe Price IDs configured in
+Stripe itself, never hardcoded here.
+
+### ParentSubscription
+- id, parentAccountId (unique — one per parent account), stripeCustomerId (unique),
+  stripeSubscriptionId (unique, nullable until checkout completes), status (enum:
+  INCOMPLETE/TRIALING/ACTIVE/PAST_DUE/CANCELED/UNPAID), currentPeriodEnd
+
+### ApiClient
+- A business/developer customer of the commercial API — never a parent or child, a completely
+  separate identity space with no login of its own (authenticated by API key only).
+- id, name, contactEmail (unique), stripeCustomerId (unique, nullable), stripeSubscriptionId
+  (unique, nullable), status (same enum as ParentSubscription)
+
+### ApiKey
+- id, apiClientId, keyPrefix (the raw key's own first few characters, not secret on its own,
+  kept only so a client can recognize which key is which), keyHash (unique — only a SHA-256
+  hash of the raw key is ever stored, same reasoning as RefreshToken.tokenHash), createdAt,
+  lastUsedAt, revokedAt
+
+### ApiUsageLog
+- id, apiClientId, apiKeyId, endpoint, contentId (nullable), createdAt — one row per commercial
+  API call, the basis for any future usage-based billing or rate-limit reporting.
+
 ## Cross-cutting
 
 Every table has `createdAt`; mutable tables have `updatedAt`. Soft-delete (`archivedAt` /

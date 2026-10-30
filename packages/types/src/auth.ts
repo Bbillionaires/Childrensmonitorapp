@@ -64,5 +64,8 @@ export const parentProfileSchema = z.object({
   mfaEnabled: z.boolean(),
   pinConfigured: z.boolean(),
   createdAt: z.string(),
+  // Milestone 10 — null until the parent has ever started a checkout. The web app's
+  // dashboard layout redirects to /subscribe for anything other than ACTIVE/TRIALING.
+  subscriptionStatus: z.enum(["INCOMPLETE", "TRIALING", "ACTIVE", "PAST_DUE", "CANCELED", "UNPAID"]).nullable(),
 });
 export type ParentProfile = z.infer<typeof parentProfileSchema>;

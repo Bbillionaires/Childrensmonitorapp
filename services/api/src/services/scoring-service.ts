@@ -303,3 +303,18 @@ export async function listApprovedContentWithScores(parentAccountId: string): Pr
     approvedForChildren: entry.approvedForChildren,
   }));
 }
+
+/**
+ * The single-content counterpart to `attachSupervisionScores` — used by the commercial
+ * Supervision Score API (POST /api/v1/analyze), which scores exactly one piece of content per
+ * call rather than a parent's whole approved library. `null` if content exists but hasn't
+ * been scored yet (shouldn't normally happen — the caller is expected to have just called
+ * `ensureContentScored` for this same contentId).
+ */
+export async function getScoreSummary(contentId: string): Promise<SupervisionScoreSummary | null> {
+  const score = await prisma.supervisionScore.findUnique({
+    where: { contentId },
+    include: { currentScoreVersion: { include: { categoryResults: { include: { safetyCategory: true } } } } },
+  });
+  return score ? toSummary(score.currentScoreVersion) : null;
+}

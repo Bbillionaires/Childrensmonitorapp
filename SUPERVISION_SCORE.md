@@ -150,18 +150,19 @@ is added, only `signalsUsed` grows.
   technically appropriate — a `ParentApproval` row is a final decision; the score informs,
   it does not gate, a parent's own explicit choice.
 
-## Future: commercial Supervision Score API
+## Commercial Supervision Score API (Milestone 10)
 
-Architected, not exposed publicly in the MVP:
+Built for real, exactly as sketched above:
 
 ```
 POST /api/v1/analyze
+Authorization: Bearer fsk_live_...
 { "contentUrl": "...", "contentType": "video", "targetAge": 8 }
 
 → {
   "contentIdentifier": "...",
   "supervisionScore": 934,
-  "categoryScores": { ... },
+  "categoryScores": { "grooming_indicators": 950, ... },
   "confidence": 0.82,
   "riskFlags": ["advertising_manipulation"],
   "explanation": "...",
@@ -169,6 +170,12 @@ POST /api/v1/analyze
 }
 ```
 
-This requires authentication, per-key rate limiting, and billing before it is exposed beyond
-this product's own internal callers — tracked as Milestone 10, and is namespaced `/api/v1/`
-now specifically so it can be split into its own service later without a breaking path change.
+Authenticated by a per-business API key, rate-limited per key, and gated on an active (paid)
+subscription — see [COMMERCIAL_API.md](./COMMERCIAL_API.md) for the full contract, how
+businesses sign up, and exactly what's real vs. what still needs the operator's own Stripe
+account configured. `targetAge` is accepted for request-shape compatibility with the original
+sketch above but does not currently change the computed score: this engine scores content
+intrinsically (0-1000), the same way it does for this app's own parents — there is no
+age-adjusted scoring model yet. Namespaced `/api/v1/` since before this milestone, specifically
+so it could be split into its own service later without a breaking path change — unchanged by
+actually building it.

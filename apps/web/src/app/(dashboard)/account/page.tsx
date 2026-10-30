@@ -66,6 +66,16 @@ export default function AccountPage() {
             <dt className="text-slate-500">Quick-switch PIN</dt>
             <dd className="text-slate-900">{parent.pinConfigured ? "Set" : "Not set"}</dd>
           </div>
+          <div className="flex justify-between">
+            <dt className="text-slate-500">Subscription</dt>
+            <dd className="text-slate-900">
+              {parent.subscriptionStatus === "ACTIVE" && "Active"}
+              {parent.subscriptionStatus === "TRIALING" && "Trial"}
+              {parent.subscriptionStatus === "PAST_DUE" && "Past due — update your payment method"}
+              {(parent.subscriptionStatus === "CANCELED" || parent.subscriptionStatus === "UNPAID") && "Canceled"}
+              {(parent.subscriptionStatus === "INCOMPLETE" || parent.subscriptionStatus === null) && "Incomplete"}
+            </dd>
+          </div>
         </dl>
       </div>
 

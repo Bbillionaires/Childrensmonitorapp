@@ -21,6 +21,16 @@ const envSchema = z.object({
   ANTHROPIC_API_KEY: z.string().optional(),
   OPENAI_API_KEY: z.string().optional(),
   OPENAI_MODEL: z.string().optional(),
+
+  // Milestone 10 — commercial Supervision Score API + parent subscriptions, both billed
+  // through Stripe. STRIPE_WEBHOOK_SECRET verifies that webhook requests genuinely came from
+  // Stripe (see packages/billing) — without it, anyone could POST a fake "subscription
+  // active" event. The two price IDs point at Price objects created in the operator's own
+  // Stripe Dashboard; no dollar amount is ever hardcoded in this codebase.
+  STRIPE_SECRET_KEY: z.string().optional(),
+  STRIPE_WEBHOOK_SECRET: z.string().optional(),
+  STRIPE_PARENT_PRICE_ID: z.string().optional(),
+  STRIPE_API_CLIENT_PRICE_ID: z.string().optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;

@@ -3,6 +3,7 @@ import { hashPassword, verifyPassword } from "./password.js";
 import { signAccessToken, verifyAccessToken, InvalidSessionTokenError } from "./jwt.js";
 import { assertChildMatches, assertParentSession, assertChildSession, ForbiddenError } from "./rbac.js";
 import { generateTotpSecret, verifyTotpCode } from "./totp.js";
+import { generateApiKey, hashApiKey } from "./api-keys.js";
 import type { ChildSessionClaims, ParentSessionClaims } from "@app/types";
 
 describe("password hashing", () => {
@@ -91,5 +92,28 @@ describe("totp", () => {
     const acceptedByB = codes.filter((code) => verifyTotpCode(secretB, code, now));
     expect(acceptedByA).toEqual([]);
     expect(acceptedByB).toEqual([]);
+  });
+});
+
+describe("api keys", () => {
+  it("generates a recognizable, unique raw key and a matching hash", () => {
+    const a = generateApiKey();
+    const b = generateApiKey();
+
+    expect(a.rawKey).toMatch(/^fsk_live_/);
+    expect(a.rawKey).not.toBe(b.rawKey);
+    expect(a.keyHash).not.toBe(b.keyHash);
+    expect(a.keyPrefix).toBe(a.rawKey.slice(0, a.keyPrefix.length));
+  });
+
+  it("hashApiKey reproduces the same hash generateApiKey stored, so a later request can be verified", () => {
+    const { rawKey, keyHash } = generateApiKey();
+    expect(hashApiKey(rawKey)).toBe(keyHash);
+  });
+
+  it("never stores the raw key — only its hash is persisted-shaped data", () => {
+    const { rawKey, keyHash } = generateApiKey();
+    expect(keyHash).not.toContain(rawKey);
+    expect(keyHash).toHaveLength(64); // hex-encoded SHA-256
   });
 });

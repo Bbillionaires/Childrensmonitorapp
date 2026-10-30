@@ -42,6 +42,17 @@ async function registerParent(app: FastifyInstance, email: string): Promise<Cook
     payload: { email, password: "Str0ngPassw0rd!", displayName: "Test Parent" },
   });
   expect(response.statusCode).toBe(201);
+  // Milestone 10 gates /api/parents/* behind an active subscription — see
+  // plugins/subscription-gate.ts.
+  const user = await prisma.user.findUniqueOrThrow({ where: { email }, include: { parentAccount: true } });
+  await prisma.parentSubscription.create({
+    data: {
+      parentAccountId: user.parentAccount!.id,
+      stripeCustomerId: `cus_test_${user.parentAccount!.id}`,
+      stripeSubscriptionId: `sub_test_${user.parentAccount!.id}`,
+      status: "ACTIVE",
+    },
+  });
   return jarFromInjectResponse(response.cookies);
 }
 

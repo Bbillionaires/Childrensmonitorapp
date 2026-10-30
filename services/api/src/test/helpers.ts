@@ -1,5 +1,6 @@
 import { expect } from "vitest";
 import type { FastifyInstance } from "fastify";
+import { prisma } from "@app/database";
 
 export interface CookieJar {
   accessToken?: string;
@@ -22,6 +23,25 @@ export function cookieHeader(jar: CookieJar): string {
     .join("; ");
 }
 
+/**
+ * Milestone 10 gates every /api/parents/* route (besides GET /me) behind an active
+ * subscription — see plugins/subscription-gate.ts. Tests have no real Stripe to subscribe
+ * through, so this writes a ParentSubscription row directly, the same way a webhook would
+ * once Stripe confirms payment, so existing tests keep exercising the product itself rather
+ * than the paywall.
+ */
+export async function activateParentSubscription(email: string): Promise<void> {
+  const user = await prisma.user.findUniqueOrThrow({ where: { email }, include: { parentAccount: true } });
+  await prisma.parentSubscription.create({
+    data: {
+      parentAccountId: user.parentAccount!.id,
+      stripeCustomerId: `cus_test_${user.parentAccount!.id}`,
+      stripeSubscriptionId: `sub_test_${user.parentAccount!.id}`,
+      status: "ACTIVE",
+    },
+  });
+}
+
 export async function registerParent(app: FastifyInstance, email: string): Promise<CookieJar> {
   const response = await app.inject({
     method: "POST",
@@ -29,6 +49,7 @@ export async function registerParent(app: FastifyInstance, email: string): Promi
     payload: { email, password: "Str0ngPassw0rd!", displayName: "Test Parent" },
   });
   expect(response.statusCode).toBe(201);
+  await activateParentSubscription(email);
   return jarFromInjectResponse(response.cookies);
 }
 

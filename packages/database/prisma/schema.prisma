@@ -87,6 +87,7 @@ model ParentAccount {
   searchRequests     SearchRequest[]
   firstImportedContent Content[]
   contentSubmissions ContentSubmission[]
+  subscription       ParentSubscription?
 
   @@map("parent_accounts")
 }
@@ -225,6 +226,7 @@ model Content {
   parentReports        ParentReport[]
   aiRecommendations    AIRecommendation[]
   submissions          ContentSubmission[]
+  apiUsageLogs         ApiUsageLog[]
 
   @@unique([providerId, providerRefId])
   @@map("content")
@@ -570,4 +572,90 @@ model AIRecommendation {
 
   @@index([searchRequestId])
   @@map("ai_recommendations")
+}
+
+// ---------------------------------------------------------------------------
+// Billing (Milestone 10) — two independent subscriptions: a parent's own access to this
+// app, and a business's access to the commercial Supervision Score API. Both are Stripe
+// Checkout subscriptions at prices configured in Stripe itself (not hardcoded here — see
+// packages/billing and COMMERCIAL_API.md), kept in sync by webhook events rather than trusted
+// client state, the same "server decides, never the client" principle as everywhere else in
+// this schema.
+// ---------------------------------------------------------------------------
+
+enum SubscriptionStatus {
+  INCOMPLETE
+  TRIALING
+  ACTIVE
+  PAST_DUE
+  CANCELED
+  UNPAID
+}
+
+model ParentSubscription {
+  id                   String             @id @default(cuid())
+  parentAccountId      String             @unique
+  parentAccount        ParentAccount      @relation(fields: [parentAccountId], references: [id], onDelete: Cascade)
+  stripeCustomerId     String             @unique
+  stripeSubscriptionId String?            @unique
+  status               SubscriptionStatus @default(INCOMPLETE)
+  currentPeriodEnd     DateTime?
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+
+  @@map("parent_subscriptions")
+}
+
+// A business/developer customer of the commercial Supervision Score API — never a parent or
+// child in this app; completely separate identity space, see COMMERCIAL_API.md.
+model ApiClient {
+  id                   String             @id @default(cuid())
+  name                 String
+  contactEmail         String             @unique
+  stripeCustomerId     String?            @unique
+  stripeSubscriptionId String?            @unique
+  status               SubscriptionStatus @default(INCOMPLETE)
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+
+  apiKeys   ApiKey[]
+  usageLogs ApiUsageLog[]
+
+  @@map("api_clients")
+}
+
+// Only a SHA-256 hash of the raw key is ever stored — same reasoning as
+// RefreshToken.tokenHash/PasswordResetToken.tokenHash (see packages/auth's opaque-tokens.ts):
+// a leaked database dump alone must never be replayable as a live key. `keyPrefix` is the raw
+// key's own first few characters (not secret on its own) kept only so a client can recognize
+// which key is which without ever seeing the full value again after issuance.
+model ApiKey {
+  id          String    @id @default(cuid())
+  apiClientId String
+  apiClient   ApiClient @relation(fields: [apiClientId], references: [id], onDelete: Cascade)
+  keyPrefix   String
+  keyHash     String    @unique
+  createdAt   DateTime  @default(now())
+  lastUsedAt  DateTime?
+  revokedAt   DateTime?
+
+  usageLogs ApiUsageLog[]
+
+  @@index([apiClientId])
+  @@map("api_keys")
+}
+
+model ApiUsageLog {
+  id          String    @id @default(cuid())
+  apiClientId String
+  apiClient   ApiClient @relation(fields: [apiClientId], references: [id], onDelete: Cascade)
+  apiKeyId    String
+  apiKey      ApiKey    @relation(fields: [apiKeyId], references: [id], onDelete: Cascade)
+  endpoint    String
+  contentId   String?
+  content     Content?  @relation(fields: [contentId], references: [id], onDelete: SetNull)
+  createdAt   DateTime  @default(now())
+
+  @@index([apiClientId, createdAt])
+  @@map("api_usage_logs")
 }

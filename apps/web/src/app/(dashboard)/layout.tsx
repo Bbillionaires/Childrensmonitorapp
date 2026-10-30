@@ -48,12 +48,23 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     }
   }, [loading, parent, router]);
 
+  // Same reasoning, for the subscription paywall (Milestone 10): services/api's
+  // requireActiveSubscription preHandler is the real gate on every route here — this is just
+  // so a logged-in-but-unpaid parent sees /subscribe instead of a dashboard full of 402s.
+  useEffect(() => {
+    if (!loading && parent && parent.subscriptionStatus !== "ACTIVE" && parent.subscriptionStatus !== "TRIALING") {
+      router.replace("/subscribe");
+    }
+  }, [loading, parent, router]);
+
   // A navigation from the mobile drawer should close it, same as tapping outside would.
   useEffect(() => {
     setMenuOpen(false);
   }, [pathname]);
 
-  if (loading || !parent) {
+  const entitled = parent?.subscriptionStatus === "ACTIVE" || parent?.subscriptionStatus === "TRIALING";
+
+  if (loading || !parent || !entitled) {
     return (
       <div className="flex min-h-screen items-center justify-center text-sm text-slate-500">
         Loading…

@@ -167,6 +167,19 @@ importers:
         specifier: ^2.1.2
         version: 2.1.9(@types/node@22.20.2)(lightningcss@1.33.0)(terser@5.51.2)
 
+  packages/billing:
+    dependencies:
+      stripe:
+        specifier: ^23.1.0
+        version: 23.1.0(@types/node@22.20.2)
+    devDependencies:
+      typescript:
+        specifier: ^5.6.3
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.2
+        version: 2.1.9(@types/node@22.20.2)(lightningcss@1.33.0)(terser@5.51.2)
+
   packages/config:
     dependencies:
       zod:
@@ -239,6 +252,9 @@ importers:
       '@app/auth':
         specifier: workspace:*
         version: link:../../packages/auth
+      '@app/billing':
+        specifier: workspace:*
+        version: link:../../packages/billing
       '@app/config':
         specifier: workspace:*
         version: link:../../packages/config
@@ -4543,6 +4559,15 @@ packages:
   strip-json-comments@3.1.1:
     resolution: {integrity: sha512-6fPc+R4ihwqP6N/aIv2f1gMH8lOVtWQHoqC4yK6oSDVVocumAsfCqjkXnqiYMhmMwS/mEHLp7Vehlt3ql6lEig==}
     engines: {node: '>=8'}
+
+  stripe@23.1.0:
+    resolution: {integrity: sha512-fVUfMSfTPoukfoV//MUKAx2+YxyKmYaYtnAL9VkfnHfaPNQylFdWZMD+zgUFerI8rjbaiER8Vzj2XEUQ2AhAsQ==}
+    engines: {node: '>=20'}
+    peerDependencies:
+      '@types/node': '>=20'
+    peerDependenciesMeta:
+      '@types/node':
+        optional: true
 
   structured-headers@0.4.1:
     resolution: {integrity: sha512-0MP/Cxx5SzeeZ10p/bZI0S6MpgD+yxAhi1BOQ34jgnMXsCq3j1t6tQnZu+KdlL7dvJTLT3g9xN8tl10TqgFMcg==}
@@ -10081,6 +10106,10 @@ snapshots:
   strip-bom@3.0.0: {}
 
   strip-json-comments@3.1.1: {}
+
+  stripe@23.1.0(@types/node@22.20.2):
+    optionalDependencies:
+      '@types/node': 22.20.2
 
   structured-headers@0.4.1: {}
 

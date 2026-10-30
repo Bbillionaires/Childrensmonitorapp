@@ -13,7 +13,7 @@ import { ensureContentScored } from "./scoring-service.js";
  * database," deduplicated globally by (providerId, providerRefId) per the Content model's
  * doc comment.
  */
-async function upsertVideoContent(metadata: ProviderVideoMetadata, parentAccountId: string): Promise<ContentRow> {
+async function upsertVideoContent(metadata: ProviderVideoMetadata, parentAccountId: string | null): Promise<ContentRow> {
   const commonFields = {
     title: metadata.title,
     description: metadata.description,
@@ -43,7 +43,7 @@ async function upsertVideoContent(metadata: ProviderVideoMetadata, parentAccount
   });
 }
 
-async function upsertWebsiteContent(rawUrl: string, parentAccountId: string): Promise<ContentRow> {
+async function upsertWebsiteContent(rawUrl: string, parentAccountId: string | null): Promise<ContentRow> {
   const parsed = new URL(rawUrl);
   const hostname = parsed.hostname.toLowerCase();
   const normalizedUrl = parsed.toString();
@@ -130,5 +130,5 @@ export async function listSubmittedContent(parentAccountId: string): Promise<Con
   return submissions.map((submission) => toContentSummary(submission.content));
 }
 
-export { toContentSummary, upsertVideoContent, recordContentSubmission };
+export { toContentSummary, upsertVideoContent, upsertWebsiteContent, recordContentSubmission };
 export type { ContentRow };

@@ -13,12 +13,15 @@ bypass.
 
 ```
 /apps
-  /web            Next.js 14 (App Router), one deployable with three surfaces:
-                    (parent)  — dashboard, requires parent session
+  /web            Next.js 14 (App Router), one deployable with several surfaces:
+                    (parent)  — dashboard, requires parent session AND an active subscription
+                                (Milestone 10 — see requireActiveSubscription below)
                     (child)   — player/library UI, requires child session, mobile-first (PWA)
                     /tv       — the same child session/API, a 10-foot UI navigated by a TV
                                 remote's D-pad instead of touch/mouse (Milestone 9) — see
                                 apps/web/src/lib/tv-nav.ts
+                    /subscribe, /api-access — the parent paywall and the public B2B signup
+                                page for the commercial Supervision Score API (Milestone 10)
   /mobile         Expo/React Native scaffold (Milestone 8) — hand-rolled screen switching,
                     UI-only stub screens, intended to consume the same REST API. Unverified:
                     no simulator/device in this environment — see apps/mobile/README.md.
@@ -42,6 +45,10 @@ bypass.
                          users depend on without recording a `ScoreVersion` row.
   /ai                   Natural-language discovery brief → structured `DiscoveryQuery`.
                          Adapter interface so the LLM provider is swappable.
+  /billing              Thin Stripe SDK wrapper (Checkout Session creation, webhook signature
+                         verification/event parsing) — the only package that talks to Stripe,
+                         the same "one package per external API" discipline as
+                         content-providers/ai (Milestone 10).
   /config               Shared tsconfig, eslint config, and a validated env-var schema.
 
 /services
@@ -100,6 +107,23 @@ after handoff. "Parent PIN sign-in" (`POST /api/child/exit-to-parent`) reverses 
 it requires an active child session to even attempt, verifies the parent's PIN, and — on
 success — issues a complete fresh parent session (access + refresh + CSRF), the same as a
 normal login.
+
+A third, unrelated authentication mechanism exists for the commercial Supervision Score API
+(Milestone 10): a business calls with `Authorization: Bearer <API key>`, verified by hashing
+the raw key and looking up its stored SHA-256 hash (`services/api/src/plugins/api-key-auth.ts`)
+— no JWT, no cookie, no session claims, and no connection whatsoever to a `ParentAccount` or
+`Child`. An `ApiClient` is a completely separate identity space with no login of its own.
+Layered on top of (not instead of) that key check is a subscription-entitlement check
+(`isSubscriptionEntitled`, shared with the parent-app paywall below) — a genuine key whose
+client's subscription has lapsed is rejected with `402`, not `401`: the key itself is still
+valid, the client just isn't currently paid up.
+
+Separately, every `/api/parents/*` route (except `GET /me`) is now also gated on an active
+*subscription*, not just a valid session — `requireActiveSubscription`
+(`services/api/src/plugins/subscription-gate.ts`), added as a second `preHandler` after
+`requireParentSession`. This is server-side enforcement of the paywall, the same
+"server decides, never the client" principle as the role/ownership checks above: the web app's
+own redirect to `/subscribe` is a UX nicety, not the actual gate.
 
 ## Content provider adapters
 

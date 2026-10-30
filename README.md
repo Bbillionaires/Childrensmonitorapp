@@ -21,6 +21,7 @@ proprietary **Supervision Score** safety-rating engine.
 | [DATABASE_SCHEMA.md](./DATABASE_SCHEMA.md) | Normalized schema for every domain entity |
 | [SUPERVISION_SCORE.md](./SUPERVISION_SCORE.md) | The safety-rating framework and its versioning |
 | [SECURITY_AND_PRIVACY.md](./SECURITY_AND_PRIVACY.md) | COPPA posture, RBAC, encryption, data minimization |
+| [COMMERCIAL_API.md](./COMMERCIAL_API.md) | The B2B Supervision Score API: signup, auth, rate limits, billing |
 | [IMPLEMENTATION_PLAN.md](./IMPLEMENTATION_PLAN.md) | Stack rationale, costs, milestone-by-milestone plan |
 
 ## Repository layout
@@ -41,6 +42,7 @@ proprietary **Supervision Score** safety-rating engine.
   /content-providers    ContentProvider adapter interface + provider implementations
   /supervision-score    Supervision Score engine interfaces + MVP rule-based scorer
   /ai                   AI discovery: natural language → structured search params
+  /billing              Stripe wrapper: checkout sessions, webhook verification (Milestone 10)
   /config               Shared eslint/tsconfig/env-schema config
 
 /services
@@ -83,7 +85,7 @@ including what the credential is for, where to obtain it, and which environment 
 
 ## Status
 
-Milestones 1–7 are implemented, and Milestones 8–9 are each split (see below): monorepo scaffold, full domain database schema, parent
+Milestones 1–7 and 10 are implemented, and Milestones 8–9 are each split (see below): monorepo scaffold, full domain database schema, parent
 authentication, parent dashboard, child profile management, URL and playlist import (a real
 YouTube adapter plus a website-whitelist fallback — no scraping anywhere), the parent
 approval pipeline (bulk select/approve/reject), the child-facing experience (device-handoff
@@ -128,6 +130,18 @@ current `react-native-tvos` (the standard way to target both Apple tvOS and Andr
 from one React codebase) with the same native-auth gap deliberately left open, and explicitly
 **unverified** — no Apple TV/Android TV simulator exists here. Roku is deliberately **not**
 scaffolded: BrightScript shares zero code with this stack, and building it would be a separate,
-from-scratch project — see [apps/tv/README.md](./apps/tv/README.md). See
+from-scratch project — see [apps/tv/README.md](./apps/tv/README.md). Milestone 10 adds real
+subscription billing on both sides of the product: parents now hit a server-enforced paywall
+(`/subscribe`) before reaching their dashboard, and a new B2B surface — the commercial
+Supervision Score API — lets other businesses (parental-control products, schools/EdTech,
+smart-TV platforms) license this engine for their own use via a signed-up, API-key-authenticated
+`POST /api/v1/analyze`, priced and subscribed separately (and higher) than the parent tier. Both
+are real, tested Stripe Checkout + webhook integrations (unit-tested against a mocked Stripe
+client, and live-verified end-to-end against a real seeded database confirming the paywall and
+signup pages fail honestly when billing isn't configured, and that activating a subscription
+genuinely unlocks both the dashboard and the API) — the one thing that could not be verified
+here is an actual live Checkout redirect/webhook delivery, which needs a real Stripe account.
+See [COMMERCIAL_API.md](./COMMERCIAL_API.md) for the full API contract and exactly what's real
+vs. what still needs the operator's own Stripe keys. See
 [IMPLEMENTATION_PLAN.md](./IMPLEMENTATION_PLAN.md) for what's
 next.

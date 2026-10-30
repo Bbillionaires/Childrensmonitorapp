@@ -13,6 +13,7 @@
   "dependencies": {
     "@app/auth": "workspace:*",
     "@app/ai": "workspace:*",
+    "@app/billing": "workspace:*",
     "@app/config": "workspace:*",
     "@app/content-providers": "workspace:*",
     "@app/database": "workspace:*",

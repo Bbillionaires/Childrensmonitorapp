@@ -30,7 +30,7 @@ export default async function parentRoutes(fastify: FastifyInstance, opts: { env
     const claims = request.sessionClaims as ParentSessionClaims;
     const user = await prisma.user.findUnique({
       where: { id: claims.userId },
-      include: { parentAccount: true },
+      include: { parentAccount: { include: { subscription: true } } },
     });
     if (!user?.parentAccount) return reply.code(404).send({ error: "Account not found" });
 
@@ -42,6 +42,7 @@ export default async function parentRoutes(fastify: FastifyInstance, opts: { env
       mfaEnabled: user.mfaEnabled,
       pinConfigured: Boolean(user.pinHash),
       createdAt: user.createdAt.toISOString(),
+      subscriptionStatus: user.parentAccount.subscription?.status ?? null,
     });
   });
 

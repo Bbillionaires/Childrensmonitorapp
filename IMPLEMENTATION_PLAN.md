@@ -58,6 +58,10 @@ Postgres database, which can be run locally via Docker with no third-party accou
 | `ANTHROPIC_API_KEY` | Milestone 4 — AI-assisted discovery, **fallback** provider only (used when OpenAI's call fails) | console.anthropic.com → API keys | `ANTHROPIC_API_KEY` |
 | `RESEND_API_KEY` (or equivalent) | Milestone 1's password-reset email delivery in a real (non-local) environment | resend.com (or any transactional email provider) | `RESEND_API_KEY` |
 | `JWT_ACCESS_SECRET` / `JWT_REFRESH_SECRET` | Milestone 1 — session signing | Generate locally (`openssl rand -base64 48`); not a third-party account | same names |
+| `STRIPE_SECRET_KEY` | Milestone 10 — parent subscriptions and the commercial Supervision Score API's billing | dashboard.stripe.com → Developers → API keys (test-mode `sk_test_...` is free) | `STRIPE_SECRET_KEY` |
+| `STRIPE_WEBHOOK_SECRET` | Milestone 10 — verifying a webhook request genuinely came from Stripe | dashboard.stripe.com → Developers → Webhooks (or `stripe listen` locally) | `STRIPE_WEBHOOK_SECRET` |
+| `STRIPE_PARENT_PRICE_ID` | Milestone 10 — what parents pay; set in Stripe's own dashboard, never hardcoded here | dashboard.stripe.com → Product catalog → create a recurring Price | `STRIPE_PARENT_PRICE_ID` |
+| `STRIPE_API_CLIENT_PRICE_ID` | Milestone 10 — what commercial API customers pay (expected higher than the parent tier) | Same as above, a second Price | `STRIPE_API_CLIENT_PRICE_ID` |
 
 Until `YOUTUBE_API_KEY` is supplied, `content-providers` ships as a clearly labeled
 interface/stub — no fabricated metadata is ever returned as if real. Discovery
@@ -645,8 +649,95 @@ claimed to be,** for an actually running/testable native TV app (needs a real Ap
 simulator or device) or for Roku at all (a from-scratch, separate-language project, out of scope
 until explicitly requested).
 
-## Milestone 10
+## Milestone 10 — exact implementation plan (done — see below for the one unverifiable piece)
 
-Unchanged from PRODUCT_REQUIREMENTS.md's list; will get this same treatment (a short plan
-reviewed before implementation, external-credential stop points called out explicitly) when
-started, rather than being built ahead of the current milestone.
+PRODUCT_REQUIREMENTS.md names this milestone "Commercial Supervision Score API" —
+`SUPERVISION_SCORE.md` had already architected its contract (`POST /api/v1/analyze`) back in
+Milestone 5, explicitly noting it needed "authentication, per-key rate limiting, and billing
+before it is exposed beyond this product's own internal callers." Before building, two real
+questions needed the user's own answer, not an engineering assumption: *who* actually licenses
+a content-safety-scoring API (this product was conceived as consumer-facing, so "who's the B2B
+customer" wasn't obvious — the answer: other parental-control products, schools/EdTech content
+filters, smart-TV platforms, and kids'-device makers, none of whom would ever touch the
+parent/child app directly), and *how* to monetize it. The decision: subscriptions on both
+sides — parents pay a monthly subscription to use the app at all, B2B API customers pay a
+separate, higher-tier subscription — with billing/payment processing explicitly flagged as
+needing a real Stripe account, the same "you need to supply this credential" pattern as
+`YOUTUBE_API_KEY`/`OPENAI_API_KEY` in earlier milestones, rather than faking a payment flow.
+
+1. **Schema** (`packages/database`): `ParentSubscription` (one per `ParentAccount`), `ApiClient`
+   (a business/developer customer — a completely separate identity space, never a parent or
+   child, with no login of its own), `ApiKey` (only a SHA-256 hash of the raw key is ever
+   stored — the same opaque-token discipline as refresh/password-reset tokens), and
+   `ApiUsageLog` (one row per commercial API call — the basis for any future usage-based
+   billing or reporting, though billing itself is flat-rate subscription today, not metered).
+2. **`packages/billing`** (new) — a thin Stripe SDK wrapper, the only package that talks to
+   Stripe, mirroring the "one package per external API" discipline `content-providers`/`ai`
+   already follow: Checkout Session creation (tagging each session with an `ownerKind`
+   — `"parent"` or `"api_client"` — and `ownerId` in Stripe metadata, carried forward onto the
+   Subscription object Stripe creates from it, so a webhook event can be dispatched to the
+   right table with zero Stripe-side lookups) and webhook signature verification/event parsing.
+   `createBillingClient` returns `undefined` when `STRIPE_SECRET_KEY` isn't configured, the
+   same honest-failure pattern `createDiscoveryTranslator` established in Milestone 4.
+3. **Parent paywall**: `POST /api/billing/checkout-session` (requires a parent session) and
+   `POST /api/billing/webhook` (Stripe calls this directly — no session, and the *raw* request
+   body, not Fastify's parsed JSON, is required to verify the HMAC signature, so it's registered
+   in its own encapsulated context with a raw-body content-type parser). A new
+   `requireActiveSubscription` preHandler gates every `/api/parents/*` route except `GET /me`
+   (which must stay reachable so the dashboard shell can show a named "Subscribe" prompt rather
+   than erroring before it renders anything) — enforced server-side, not just by the web app's
+   own `/subscribe` redirect, the same "server decides" principle as every other authorization
+   check in this API.
+4. **Commercial API**: `POST /api/v1/clients` (public — a business has no key yet) creates an
+   `ApiClient` and starts its (higher-tier) Checkout session; the webhook's handling of an
+   `api_client`-tagged event issues an API key the first time the client becomes entitled and
+   **emails it once** (reusing the existing `EmailSender`/`RESEND_API_KEY` infrastructure from
+   Milestone 1's password-reset flow) — the key is never returned by any API response or shown
+   in any web page, only its hash ever persisted. `GET /api/v1/clients/:id/key-status` lets the
+   post-checkout page poll for "activating…" vs. "check your email" without exposing the key.
+   `POST /api/v1/analyze` (API-key-authenticated via a new, completely separate
+   `requireApiKey` preHandler — no JWT, no cookie, no connection to parent/child sessions at
+   all) resolves the submitted URL through the exact same `ContentProvider` registry and
+   content-dedup logic every internal caller uses (`upsertVideoContent`/`upsertWebsiteContent`,
+   now accepting a nullable `parentAccountId` for this exact case), scores it with the same
+   engine, and maps the result onto the contract `SUPERVISION_SCORE.md` originally sketched.
+   Rate-limited 100/hour per API key (keyed by the raw `Authorization` header value via a
+   per-route `config.rateLimit` override on the existing global `@fastify/rate-limit`
+   instance — not a second plugin registration, which turned out to be a no-op: the plugin
+   wraps itself with `fastify-plugin`, so Fastify/avvio treats a second `register()` call of
+   the same plugin as already-satisfied rather than an independent instance, a real gotcha this
+   surfaced and is worth remembering). A lapsed subscription gets `402`, not `401`: the key
+   itself stays valid and starts working again the moment the subscription does, rather than
+   being revoked.
+5. **Web UI**: `/subscribe` (parent paywall, Stripe Checkout redirect) and `/subscribe/success`;
+   `/api-access` (public B2B signup) and `/api-access/success` (polls the key-status endpoint).
+   The account page shows live subscription status.
+6. Tests: 12 new integration tests (`services/api/src/test/billing.test.ts`) covering the
+   subscription gate (including its `GET /me` exemption), webhook signature rejection and
+   event-driven activation, the full B2B signup → webhook → key-issuance → `/analyze` path, a
+   lapsed-subscription 402 that doesn't revoke the key, and per-key rate-limit isolation
+   between two different clients — all against a **mocked Stripe client** (mocking
+   `@app/billing`'s `createBillingClient` factory, not reaching two levels down into `"stripe"`
+   itself, since Vitest's module mocking doesn't reliably intercept a dependency-of-a-dependency
+   across a pnpm workspace boundary the way it does the workspace package directly — the same
+   lesson `deep-signals.test.ts` already encoded for `@app/ai`/`openai`, re-learned here the
+   hard way). All 60 `services/api` tests (48 pre-existing + 12 new) pass; existing tests needed
+   a one-line addition to their `registerParent` test helpers (write an `ACTIVE`
+   `ParentSubscription` row directly, the same way a webhook would) so the new paywall didn't
+   silently break every test that exercises the product itself.
+7. **Live-verified**, not just unit-tested: a real seeded parent account confirmed the paywall
+   redirect fires on login *and* on directly navigating to a gated URL, that `/subscribe` and
+   `/api-access` both fail honestly with a clear operator-facing message when Stripe isn't
+   configured (no fabricated checkout), and that writing an `ACTIVE` subscription row the way a
+   webhook would genuinely unlocks both the dashboard and (per the test suite) `/api/v1/analyze`.
+
+**Status: done**, except for the one thing that genuinely cannot be verified without the
+operator's own Stripe account: an actual live Checkout redirect and a real webhook delivery
+from Stripe's servers. The integration is built to Stripe's documented contract (Checkout
+Sessions in `subscription` mode, `customer.subscription.*` webhook events, signature
+verification via `stripe.webhooks.constructEvent`) and everything short of that last mile is
+tested and live-verified — see [COMMERCIAL_API.md](./COMMERCIAL_API.md) for exactly what's real
+vs. what supplying `STRIPE_SECRET_KEY`/`STRIPE_WEBHOOK_SECRET`/`STRIPE_PARENT_PRICE_ID`/
+`STRIPE_API_CLIENT_PRICE_ID` (test-mode keys are free) would additionally confirm.
+
+This was the last milestone on PRODUCT_REQUIREMENTS.md's original list.
