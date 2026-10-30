@@ -342,7 +342,83 @@ against `transcript`/`ocrText` too, and scores `external_link_risk` from
 `externalLinksFound`) whenever a future producer starts populating them, with no interface
 change needed.
 
-## Milestones 6–10
+## Milestone 6 — exact implementation plan (done)
+
+No new external credentials. Everything here runs on data the app already has.
+
+1. **Viewing history, made real.** Previously `getPlaybackInfo` created a `ViewingHistory` row
+   with only `childId`/`contentId` set — `deviceId` was never threaded through (no code
+   anywhere created a `Device` row for a child handoff session at all) and nothing ever
+   updated `durationWatchedSeconds`/`completionPercentage` after creation. Now:
+   - `child-session-service.ts`'s `startChildDeviceSession` creates a `Device` row per handoff
+     (same pattern as a parent login in `auth-service.ts`) and adds `deviceId` to
+     `ChildSessionClaims` — this product does no device fingerprinting, so "device" here just
+     means "this particular handoff session," which is exactly the granularity the activity
+     timeline needs.
+   - `getPlaybackInfo` resolves the `PlaylistItem` (when played from a playlist) and records
+     both it and the device on the `ViewingHistory` row, returning its id as
+     `viewingHistoryId` in `PlaybackInfo`.
+   - A new child route, `POST /api/child/viewing-history/:viewingHistoryId/progress`, accepts
+     `{ positionSeconds }` — **wall-clock time the player has been open and visible, not exact
+     playback position**. We don't integrate the provider's own player API (e.g. YouTube's
+     IFrame Player API), so we can't observe pause/seek within a video; this is a documented,
+     honest limitation, not a silent approximation. The server derives
+     `completionPercentage` from the content's own already-known `durationSeconds` (never a
+     client-supplied one) and only ever moves `durationWatchedSeconds` forward, so an
+     out-of-order ping can't erase progress a later one already recorded. The child player
+     page ticks a ref once per second while `document.visibilityState === "visible"` and pings
+     every 10s plus once on cleanup.
+   - `services/api/src/services/viewing-history-service.ts` + `GET /api/parents/activity`
+     power the Viewing Activity dashboard page — a reverse-chronological timeline across all
+     of a parent's children, with device label and playlist/source when known.
+2. **Safety alerts, raised from a real trigger.** `scoring-service.ts`'s `ensureContentScored`
+   now re-runs the scorer every time it's called (not just once) and compares the result to
+   what's on file; if different, it appends a new `ScoreVersion` (never an in-place edit) and
+   points `SupervisionScore.currentScoreVersionId` at it. This matters because
+   `upsertVideoContent` already refreshes an existing `Content` row's title/description on
+   every call — a creator editing their video's title/description, surfaced the next time a
+   parent re-imports a playlist or re-submits the same URL, is the realistic source of "new
+   safety information" this milestone can act on honestly; nothing here fabricates a change
+   that didn't happen to the content's own metadata. When a re-score produces a worse result
+   (risk band dropped, or the score crossed below a specific child's own
+   `supervisionScoreMinimum`) for a child who currently holds a `ChildContentPermission` for
+   that content, `raiseSafetyAlertsForRescore` creates a `SafetyAlert` row for that child.
+   `safety-alert-service.ts` + `GET/POST /api/parents/alerts` power the Safety Alerts
+   dashboard page: **Keep Approved** just closes the alert, **Remove** reuses `decideApproval`
+   (the one true revocation path) so a removal via an alert is audit-indistinguishable from
+   any other parent rejection, and **Review Details** expands the stored explanation — content
+   is never silently removed.
+3. **Parent reporting.** `parent-report-service.ts` + `POST`/`GET /api/parents/reports` let a
+   parent report any content in their own submission queue (optionally tied to a specific
+   child) under the exact categories from PRODUCT_REQUIREMENTS.md. **Scope boundary, stated
+   honestly:** every report starts and stays `SUBMITTED` — there is no moderation/validation
+   workflow in this product yet (no reviewer role exists), so reports do not themselves
+   trigger a re-score. "Validated reports become signals feeding future Supervision Score
+   recalculation" (PRODUCT_REQUIREMENTS.md) describes a future capability once a validation
+   workflow exists, not something faked here. A "Report this content" action lives on every
+   `ContentCard`; a parent's own reports are visible under "Your Reports" on the Safety Alerts
+   page.
+4. Tests: 9 new API integration tests across three files (`viewing-history.test.ts`,
+   `safety-alerts.test.ts`, `parent-reports.test.ts`) — device/playlist attribution, monotonic
+   progress tracking with server-derived completion, a child unable to post progress against
+   another child's row, a real re-score raising an alert end-to-end (with both Keep Approved
+   and Remove resolutions) and respecting parent/parent isolation, and report submission +
+   isolation + the submission-queue ownership check.
+
+**Status: done**, verified end-to-end in a real browser session: registered a parent, approved
+a submission, handed the device to a child, played it (the page accumulated visible time and
+pinged progress in the background), signed back in as the parent, and confirmed the Viewing
+Activity page showed the real device label ("Sixkid's device") and a non-zero watched
+duration; reported the content from Approved Content and confirmed it appeared under Safety
+Alerts' "Your Reports"; confirmed the Safety Alerts page's correct empty state ("No open
+alerts") since nothing had re-scored during the session. The re-score-and-alert path itself
+(crafting a metadata change and watching a `SafetyAlert` appear, then resolving it both ways)
+is covered by the integration tests above rather than the live walkthrough, since triggering a
+real one live would require either a second live submission of content whose provider-side
+title actually changed, or a manual DB edit — both less informative than the deterministic
+test.
+
+## Milestones 7–10
 
 Unchanged from PRODUCT_REQUIREMENTS.md's list; each will get this same treatment (a short
 plan reviewed before implementation, external-credential stop points called out explicitly)

@@ -1,5 +1,6 @@
 import type { ContentSummary } from "@app/types";
 import { SupervisionScoreBadge } from "./supervision-score-badge";
+import { ReportContentAction } from "./report-content-action";
 
 function formatDuration(seconds: number | null): string | null {
   if (seconds === null) return null;
@@ -8,7 +9,15 @@ function formatDuration(seconds: number | null): string | null {
   return `${minutes}:${String(remainingSeconds).padStart(2, "0")}`;
 }
 
-export function ContentCard({ content, actions }: { content: ContentSummary; actions?: React.ReactNode }) {
+export function ContentCard({
+  content,
+  actions,
+  childId,
+}: {
+  content: ContentSummary;
+  actions?: React.ReactNode;
+  childId?: string;
+}) {
   const duration = formatDuration(content.durationSeconds);
 
   return (
@@ -34,6 +43,7 @@ export function ContentCard({ content, actions }: { content: ContentSummary; act
         )}
         {content.supervisionScore && <SupervisionScoreBadge score={content.supervisionScore} />}
         {actions && <div className="mt-3 flex gap-2">{actions}</div>}
+        <ReportContentAction contentId={content.id} childId={childId} />
       </div>
     </div>
   );

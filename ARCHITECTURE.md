@@ -189,6 +189,40 @@ other submitted content. A candidate's `matchReason` is reported honestly as whi
 search terms found it (YouTube's own relevance ranking), not a per-video explanation an LLM
 invented — that keeps the cost to one Claude call per search, not one per candidate.
 
+## Viewing history, safety alerts, and parent reporting (Milestone 6)
+
+**Viewing history** is written at two points: `getPlaybackInfo` creates a `ViewingHistory` row
+when a child starts playing something (recording the `Device` the handoff session created and
+the `PlaylistItem` if played from one), and the child player pings
+`POST /api/child/viewing-history/:id/progress` with wall-clock time it's been open and
+visible. That's a deliberate, documented simplification: this product doesn't integrate any
+provider's player API, so it can't observe pause/seek within a video — `positionSeconds` is
+time-open, not playback position. The server, never the client, derives
+`completionPercentage` from the content's own already-known `durationSeconds`, and only ever
+moves `durationWatchedSeconds` forward, so an out-of-order or duplicate ping can't erase
+progress already recorded. `services/api/src/services/viewing-history-service.ts` reads this
+same table for the parent-facing activity timeline — nothing is synthesized at read time.
+
+**Safety alerts** close the loop the Supervision Score engine's versioning model was built
+for. `scoring-service.ts`'s `ensureContentScored` doesn't just score once anymore — it re-runs
+the scorer every time it's called (at every content-creation *and* content-refresh call site)
+and compares the result to what's on file. The realistic trigger for a changed result is
+`upsertVideoContent` refreshing an existing `Content` row's title/description on a playlist
+re-import or URL re-submission — a creator editing their video, not anything fabricated. A
+changed result always appends a new `ScoreVersion` (append-only, per SUPERVISION_SCORE.md);
+when that change is worse for a specific child who currently holds a `ChildContentPermission`
+for the content (their risk band dropped, or the score crossed below their own
+`supervisionScoreMinimum`), a `SafetyAlert` is raised for that child. Resolving one reuses
+`decideApproval` for "Remove" — there is no second code path that can revoke access — so an
+alert-driven removal is indistinguishable, audit-wise, from any other parent rejection.
+
+**Parent reporting** is submission-only in this milestone: `parent-report-service.ts` lets a
+parent report content they've submitted, under PRODUCT_REQUIREMENTS.md's exact categories.
+Every report starts and stays `SUBMITTED` — there is no moderation/validation role or workflow
+in this product yet, so reports don't themselves trigger a re-score. That's a stated scope
+boundary, not an oversight: "validated reports feed future Supervision Score recalculation"
+describes a capability a validation workflow would need to exist first.
+
 ## Deployment shape (recommended, not yet provisioned)
 
 - `services/api` → any Node host (Railway/Fly/Render) with a managed Postgres

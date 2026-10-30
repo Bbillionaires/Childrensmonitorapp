@@ -1,10 +1,49 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import type { PlaybackInfo } from "@app/types";
 import { apiFetch } from "@/lib/api";
+
+const PROGRESS_PING_INTERVAL_MS = 10_000;
+
+/**
+ * Tracks wall-clock time this page has been open and visible for `viewingHistoryId`, pinging
+ * the server periodically and once on cleanup — see `recordPlaybackProgressRequestSchema`'s
+ * doc comment for why this is time-open rather than exact playback position (we don't
+ * integrate the provider's player API, so we can't observe pause/seek within a video).
+ */
+function useProgressReporting(viewingHistoryId: string | undefined) {
+  const elapsedSeconds = useRef(0);
+
+  useEffect(() => {
+    if (!viewingHistoryId) return;
+    elapsedSeconds.current = 0;
+
+    function report() {
+      if (elapsedSeconds.current > 0) {
+        void apiFetch(`/api/child/viewing-history/${viewingHistoryId}/progress`, {
+          method: "POST",
+          body: { positionSeconds: Math.round(elapsedSeconds.current) },
+        }).catch(() => {
+          // Best-effort telemetry — a dropped ping shouldn't interrupt playback.
+        });
+      }
+    }
+
+    const tickId = window.setInterval(() => {
+      if (document.visibilityState === "visible") elapsedSeconds.current += 1;
+    }, 1000);
+    const pingId = window.setInterval(report, PROGRESS_PING_INTERVAL_MS);
+
+    return () => {
+      window.clearInterval(tickId);
+      window.clearInterval(pingId);
+      report();
+    };
+  }, [viewingHistoryId]);
+}
 
 export default function ChildPlayPage() {
   const params = useParams<{ contentId: string }>();
@@ -24,6 +63,8 @@ export default function ChildPlayPage() {
       .then(setPlayback)
       .catch(() => setNotFound(true));
   }, [params.contentId, playlistId]);
+
+  useProgressReporting(playback?.viewingHistoryId);
 
   const backHref = playlistId ? `/child/playlists/${playlistId}` : "/child";
 

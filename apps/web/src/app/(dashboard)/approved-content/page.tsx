@@ -99,6 +99,7 @@ export default function ApprovedContentPage() {
           <ContentCard
             key={item.content.id}
             content={item.content}
+            childId={childId}
             actions={
               <button
                 className="btn-danger"

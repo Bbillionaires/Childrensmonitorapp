@@ -49,6 +49,7 @@ describe("rbac assertions", () => {
     role: "CHILD",
     childId: "child_a",
     parentAccountId: "parent_1",
+    deviceId: "device_a",
   };
 
   it("rejects a child session where a parent session is required", () => {

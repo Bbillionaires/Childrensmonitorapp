@@ -44,7 +44,14 @@ export async function startChildDeviceSession(
     data: { revokedAt: new Date() },
   });
 
-  const claims: ChildSessionClaims = { role: "CHILD", childId, parentAccountId };
+  // One Device row per handoff (same pattern as a parent login in auth-service.ts) — this
+  // product does no device fingerprinting, so "device" here just means "this particular
+  // handoff session," which is exactly the granularity ViewingHistory needs to record.
+  const device = await prisma.device.create({
+    data: { parentAccountId, childId, label: `${child.firstName}'s device`, platform: "WEB", lastSeenAt: new Date() },
+  });
+
+  const claims: ChildSessionClaims = { role: "CHILD", childId, parentAccountId, deviceId: device.id };
   const accessToken = signAccessToken(claims, {
     secret: env.JWT_ACCESS_SECRET,
     expiresInSeconds: CHILD_SESSION_TTL_SECONDS,

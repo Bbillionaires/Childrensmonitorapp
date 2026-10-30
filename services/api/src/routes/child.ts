@@ -1,13 +1,18 @@
 import type { FastifyInstance } from "fastify";
 import { prisma } from "@app/database";
-import { exitToParentRequestSchema } from "@app/types";
+import { exitToParentRequestSchema, recordPlaybackProgressRequestSchema } from "@app/types";
 import type { ChildSessionClaims } from "@app/types";
 import type { Env } from "@app/config";
 import { parseOrReject } from "../lib/validate.js";
 import { AuthError } from "../services/auth-service.js";
 import { exitToParentSession } from "../services/child-session-service.js";
 import { setSessionCookies } from "../services/session-cookies.js";
-import { getChildLibrary, getChildPlaylistDetail, getPlaybackInfo } from "../services/child-library-service.js";
+import {
+  getChildLibrary,
+  getChildPlaylistDetail,
+  getPlaybackInfo,
+  recordPlaybackProgress,
+} from "../services/child-library-service.js";
 import { NotFoundError } from "../lib/errors.js";
 
 /**
@@ -72,10 +77,32 @@ export default async function childRoutes(fastify: FastifyInstance, opts: { env:
         const playback = await getPlaybackInfo(
           env,
           claims.childId,
+          claims.deviceId,
           request.params.contentId,
           request.query.playlistId,
         );
         return reply.send(playback);
+      } catch (error) {
+        if (error instanceof NotFoundError) return reply.code(404).send({ error: error.message });
+        throw error;
+      }
+    },
+  );
+
+  // POST (mutating, so CSRF-guarded like every other child route that changes state), but a
+  // progress ping is routine telemetry rather than a safety-relevant decision — same looser
+  // treatment as GETs, no extra rate limit beyond the global default.
+  fastify.post<{ Params: { viewingHistoryId: string } }>(
+    "/viewing-history/:viewingHistoryId/progress",
+    { preHandler: fastify.requireCsrfHeader },
+    async (request, reply) => {
+      const claims = request.sessionClaims as ChildSessionClaims;
+      const body = parseOrReject(recordPlaybackProgressRequestSchema, request.body, reply);
+      if (!body) return;
+
+      try {
+        await recordPlaybackProgress(claims.childId, request.params.viewingHistoryId, body.positionSeconds);
+        return reply.code(204).send();
       } catch (error) {
         if (error instanceof NotFoundError) return reply.code(404).send({ error: error.message });
         throw error;

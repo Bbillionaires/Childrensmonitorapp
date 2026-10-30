@@ -12,9 +12,9 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/playlists", label: "Playlists", status: "ready" },
   { href: "/discover", label: "Discover Content", status: "ready" },
   { href: "/websites", label: "Websites", status: "soon" },
-  { href: "/activity", label: "Viewing Activity", status: "soon" },
+  { href: "/activity", label: "Viewing Activity", status: "ready" },
   { href: "/scores", label: "Supervision Scores", status: "ready" },
-  { href: "/alerts", label: "Safety Alerts", status: "soon" },
+  { href: "/alerts", label: "Safety Alerts", status: "ready" },
   { href: "/screen-time", label: "Screen-Time Settings", status: "soon" },
   { href: "/account", label: "Account Settings", status: "ready" },
 ];

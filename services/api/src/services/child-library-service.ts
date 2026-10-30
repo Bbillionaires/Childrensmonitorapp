@@ -116,12 +116,15 @@ async function findNextApprovedInPlaylist(
  * Re-checks the permission at the exact moment of playback, not just when the library was
  * listed — a parent revoking approval must take effect immediately, even mid-browsing-session
  * (see PRODUCT_REQUIREMENTS.md's "Parent approval changes propagate correctly" invariant and
- * the test covering it). Also records the start of a viewing event; Milestone 6 builds the
- * parent-facing activity timeline on top of this same ViewingHistory table.
+ * the test covering it). Also records the start of a viewing event (device + playlist source,
+ * when known) — Milestone 6 builds the parent-facing activity timeline on top of this same
+ * ViewingHistory table, and the child player reports progress back against the row's id (see
+ * recordPlaybackProgress below).
  */
 export async function getPlaybackInfo(
   env: Env,
   childId: string,
+  deviceId: string,
   contentId: string,
   playlistId: string | undefined,
 ): Promise<PlaybackInfo> {
@@ -134,7 +137,12 @@ export async function getPlaybackInfo(
   }
 
   const { content } = permission;
-  await prisma.viewingHistory.create({ data: { childId, contentId } });
+  const playlistItem = playlistId
+    ? await prisma.playlistItem.findFirst({ where: { playlistId, contentId } })
+    : null;
+  const viewingHistory = await prisma.viewingHistory.create({
+    data: { childId, contentId, deviceId, playlistItemId: playlistItem?.id },
+  });
 
   if (content.contentType === "VIDEO") {
     const registry = getProviderRegistry(env);
@@ -154,6 +162,7 @@ export async function getPlaybackInfo(
       embedUrl: embed.embedUrl,
       disableRelatedContent: embed.disableRelatedContent,
       nextContentId,
+      viewingHistoryId: viewingHistory.id,
     };
   }
 
@@ -168,5 +177,34 @@ export async function getPlaybackInfo(
     url: content.sourceUrl,
     allowedDomain: content.website.allowedDomain,
     blockExternalNavigation: content.website.blockExternalNavigation,
+    viewingHistoryId: viewingHistory.id,
   };
+}
+
+/**
+ * `positionSeconds` is wall-clock time the child player has been open and visible, not exact
+ * playback position (see `recordPlaybackProgressRequestSchema`'s doc comment) — the server
+ * derives `completionPercentage` from the content's own known duration (never a
+ * client-supplied one) and only ever moves `durationWatchedSeconds` forward, so a ping that
+ * arrives out of order can't erase progress a later one already recorded.
+ */
+export async function recordPlaybackProgress(childId: string, viewingHistoryId: string, positionSeconds: number) {
+  const row = await prisma.viewingHistory.findUnique({
+    where: { id: viewingHistoryId },
+    include: { content: { select: { durationSeconds: true } } },
+  });
+  if (!row || row.childId !== childId) {
+    throw new NotFoundError("Viewing history entry not found");
+  }
+
+  const durationWatchedSeconds = Math.max(row.durationWatchedSeconds, positionSeconds);
+  const totalDuration = row.content.durationSeconds;
+  const completionPercentage = totalDuration
+    ? Math.max(row.completionPercentage, Math.min(100, (durationWatchedSeconds / totalDuration) * 100))
+    : row.completionPercentage;
+
+  await prisma.viewingHistory.update({
+    where: { id: viewingHistoryId },
+    data: { durationWatchedSeconds, completionPercentage },
+  });
 }

@@ -6,3 +6,6 @@ export * from "./playlist.js";
 export * from "./child-session.js";
 export * from "./discovery.js";
 export * from "./supervision-score.js";
+export * from "./viewing-history.js";
+export * from "./safety-alert.js";
+export * from "./parent-report.js";

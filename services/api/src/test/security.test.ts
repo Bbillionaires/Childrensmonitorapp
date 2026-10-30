@@ -193,6 +193,7 @@ describe("Milestone 1 security boundaries", () => {
       role: "CHILD",
       childId,
       parentAccountId: "parent_irrelevant_to_this_assertion",
+      deviceId: "device_irrelevant_to_this_assertion",
     };
     const childToken = signAccessToken(childClaims, { secret: process.env.JWT_ACCESS_SECRET! });
 

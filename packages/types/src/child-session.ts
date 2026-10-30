@@ -47,6 +47,8 @@ const playbackInfoVideoSchema = z.object({
   disableRelatedContent: z.boolean(),
   /** Only set when playing within an approved playlist — autoplay never leaves one. */
   nextContentId: z.string().nullable(),
+  /** The ViewingHistory row this play started — see recordPlaybackProgressRequestSchema. */
+  viewingHistoryId: z.string(),
 });
 
 const playbackInfoWebsiteSchema = z.object({
@@ -56,6 +58,7 @@ const playbackInfoWebsiteSchema = z.object({
   url: z.string(),
   allowedDomain: z.string(),
   blockExternalNavigation: z.boolean(),
+  viewingHistoryId: z.string(),
 });
 
 export const playbackInfoSchema = z.discriminatedUnion("contentType", [
@@ -63,6 +66,20 @@ export const playbackInfoSchema = z.discriminatedUnion("contentType", [
   playbackInfoWebsiteSchema,
 ]);
 export type PlaybackInfo = z.infer<typeof playbackInfoSchema>;
+
+/**
+ * Milestone 6: how the child player reports progress back. `positionSeconds` is wall-clock
+ * time the page has been open and visible (see child play page) — not exact playback
+ * position, which would require integrating the provider's own player API; this is a known,
+ * documented limitation (see IMPLEMENTATION_PLAN.md). The server derives
+ * `completionPercentage` from the content's own known duration and never trusts a
+ * client-reported duration, and `durationWatchedSeconds` only ever moves forward (monotonic)
+ * to tolerate pings arriving out of order.
+ */
+export const recordPlaybackProgressRequestSchema = z.object({
+  positionSeconds: z.number().int().min(0),
+});
+export type RecordPlaybackProgressRequest = z.infer<typeof recordPlaybackProgressRequestSchema>;
 
 export const exitToParentRequestSchema = z.object({
   pin: z.string().regex(/^\d{4,8}$/, "PIN must be 4-8 digits"),

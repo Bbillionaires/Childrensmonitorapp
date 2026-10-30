@@ -17,6 +17,9 @@ export const childSessionClaimsSchema = z.object({
   role: z.literal("CHILD"),
   childId: z.string(),
   parentAccountId: z.string(),
+  // Milestone 6: which Device row this handoff session is attributed to, so ViewingHistory
+  // can record a real device rather than leaving it null — see child-session-service.ts.
+  deviceId: z.string(),
 });
 export type ChildSessionClaims = z.infer<typeof childSessionClaimsSchema>;
 

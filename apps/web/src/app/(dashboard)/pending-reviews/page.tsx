@@ -105,6 +105,7 @@ export default function PendingReviewsPage() {
           <ContentCard
             key={item.content.id}
             content={item.content}
+            childId={childId}
             actions={
               <>
                 <button
