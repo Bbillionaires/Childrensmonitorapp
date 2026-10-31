@@ -72,6 +72,13 @@ export class StripeBillingClient {
         metadata,
         ...(params.trialPeriodDays ? { trial_period_days: params.trialPeriodDays } : {}),
       },
+      // `managed_payments` is a real, current Checkout Session parameter (Stripe's automatic
+      // tax calculation/remittance, on by default for this account) that the installed SDK's
+      // types (stripe@23.1.0) don't yet know about — it requires every Price's Product to
+      // carry a tax code, which this operator's products don't have configured. Disabling it
+      // here is an explicit operator choice to unblock Checkout without that Dashboard setup;
+      // the operator is responsible for their own sales-tax handling as a result.
+      ...({ managed_payments: { enabled: false } } as Record<string, unknown>),
     });
 
     if (!session.url) {
