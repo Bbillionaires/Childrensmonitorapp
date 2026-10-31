@@ -68,7 +68,10 @@ export class StripeBillingClient {
       cancel_url: params.cancelUrl,
       client_reference_id: `${params.ownerKind}:${params.ownerId}`,
       metadata,
-      subscription_data: { metadata },
+      subscription_data: {
+        metadata,
+        ...(params.trialPeriodDays ? { trial_period_days: params.trialPeriodDays } : {}),
+      },
     });
 
     if (!session.url) {

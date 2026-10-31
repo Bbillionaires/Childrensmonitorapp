@@ -19,11 +19,20 @@ function requireClient(billingClient: StripeBillingClient | undefined): StripeBi
   return billingClient;
 }
 
+/** Every eligible new parent subscription gets this many days free before the first charge. */
+const PARENT_TRIAL_PERIOD_DAYS = 7;
+
 /**
  * Starts (or resumes) a parent's subscription checkout. Safe to call repeatedly — Stripe
  * Checkout is itself idempotent per session, and a parent with no existing subscription row
  * yet is the normal first-time case (ParentSubscription is created for real only once the
  * webhook confirms payment, never optimistically here).
+ *
+ * The free trial is granted only the first time: a `ParentSubscription` row is created exactly
+ * once per parent account (upserted from then on — see applySubscriptionEvent) and is never
+ * deleted, even after a cancellation, so its mere existence means this parent has already
+ * started a subscription before — checking for it here is sufficient to stop the same parent
+ * claiming a second trial by canceling and re-subscribing.
  */
 export async function createParentCheckoutSession(
   env: Env,
@@ -36,6 +45,8 @@ export async function createParentCheckoutSession(
     throw new Error("STRIPE_PARENT_PRICE_ID is not configured");
   }
 
+  const existingSubscription = await prisma.parentSubscription.findUnique({ where: { parentAccountId } });
+
   const session = await client.createCheckoutSession({
     priceId: env.STRIPE_PARENT_PRICE_ID,
     customerEmail: userEmail,
@@ -43,6 +54,7 @@ export async function createParentCheckoutSession(
     cancelUrl: `${env.WEB_APP_ORIGIN}/subscribe`,
     ownerKind: "parent",
     ownerId: parentAccountId,
+    trialPeriodDays: existingSubscription ? undefined : PARENT_TRIAL_PERIOD_DAYS,
   });
 
   return session.url;

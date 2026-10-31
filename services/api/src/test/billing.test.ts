@@ -35,7 +35,7 @@ vi.mock("@app/billing", async (importOriginal) => {
 
 const { buildApp } = await import("../app.js");
 const { prisma } = (await import("@app/database")) as { prisma: PrismaClient };
-const { registerParent, createChild, cookieHeader } = await import("./helpers.js");
+const { registerParent, createChild, cookieHeader, jarFromInjectResponse } = await import("./helpers.js");
 
 function subscriptionEvent(ownerKind: "parent" | "api_client", ownerId: string, status: string, subId = "sub_1") {
   return {
@@ -132,6 +132,60 @@ describe("Milestone 10: parent subscription + webhook", () => {
     expect(response.json().url).toBe("https://checkout.stripe.com/cs_1");
     expect(createCheckoutSessionMock).toHaveBeenCalledWith(
       expect.objectContaining({ priceId: "price_parent_fake", ownerKind: "parent" }),
+    );
+  });
+
+  it("grants a 7-day free trial to a genuinely new parent's first checkout", async () => {
+    const register = await app.inject({
+      method: "POST",
+      url: "/api/auth/register",
+      payload: { email: "trial-eligible@example.com", password: "Str0ngPassw0rd!", displayName: "New Parent" },
+    });
+    expect(register.statusCode).toBe(201);
+    const jar = jarFromInjectResponse(register.cookies);
+    createCheckoutSessionMock.mockResolvedValue({ id: "cs_trial", url: "https://checkout.stripe.com/cs_trial" });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/billing/checkout-session",
+      headers: { cookie: cookieHeader(jar), "x-csrf-token": jar.csrfToken! },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(createCheckoutSessionMock).toHaveBeenCalledWith(expect.objectContaining({ trialPeriodDays: 7 }));
+  });
+
+  it("does not grant a second trial to a parent who already has a subscription row", async () => {
+    // registerParent's own helper writes a ParentSubscription row (the same way a webhook
+    // would after a real payment) — this parent has therefore already "had" a subscription,
+    // trialed or not, so a later checkout call (e.g. after canceling) must not grant another.
+    const jar = await registerParent(app, "already-subscribed@example.com");
+    createCheckoutSessionMock.mockResolvedValue({ id: "cs_no_trial", url: "https://checkout.stripe.com/cs_no_trial" });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/billing/checkout-session",
+      headers: { cookie: cookieHeader(jar), "x-csrf-token": jar.csrfToken! },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(createCheckoutSessionMock).toHaveBeenCalledWith(
+      expect.objectContaining({ trialPeriodDays: undefined }),
+    );
+  });
+
+  it("never grants a trial to a commercial API client's checkout", async () => {
+    createCheckoutSessionMock.mockResolvedValue({ id: "cs_b2b_trial", url: "https://checkout.stripe.com/cs_b2b_trial" });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/v1/clients",
+      payload: { name: "No Trial Co", contactEmail: "no-trial@example.com" },
+    });
+
+    expect(response.statusCode).toBe(201);
+    expect(createCheckoutSessionMock).toHaveBeenCalledWith(
+      expect.objectContaining({ ownerKind: "api_client", trialPeriodDays: undefined }),
     );
   });
 

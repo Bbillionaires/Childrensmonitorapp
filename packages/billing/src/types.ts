@@ -26,6 +26,10 @@ export interface CreateCheckoutSessionParams {
   cancelUrl: string;
   ownerKind: SubscriptionOwnerKind;
   ownerId: string;
+  /** Grants a free trial on the Subscription Stripe creates from this Checkout Session.
+   *  Only ever set by the caller for an owner who has never had a subscription before —
+   *  this wrapper applies whatever it's given with no eligibility logic of its own. */
+  trialPeriodDays?: number;
 }
 
 export interface CheckoutSession {
