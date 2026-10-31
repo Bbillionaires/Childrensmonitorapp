@@ -8,6 +8,18 @@ function isProduction(): boolean {
 }
 
 /**
+ * The web app and API are deployed on different registrable domains (e.g. a Vercel
+ * app + a Railway app), making every `fetch(..., { credentials: "include" })` call
+ * cross-site — a `SameSite=Lax` cookie is never attached to those, only to same-site
+ * requests and top-level navigations. `SameSite=None` (which requires `Secure`) is the
+ * only setting that actually works there. In development both run on `localhost`
+ * (same site regardless of port), where `Lax` is the safer default.
+ */
+function cookieSameSite(): "lax" | "none" {
+  return isProduction() ? "none" : "lax";
+}
+
+/**
  * Sessions travel as httpOnly cookies (see SECURITY_AND_PRIVACY.md) plus a readable
  * double-submit CSRF cookie the client must echo back as `X-CSRF-Token` on mutating
  * requests (checked by the `requireCsrfHeader` preHandler in plugins/auth.ts).
@@ -18,21 +30,21 @@ export function setSessionCookies(
 ): void {
   reply.setCookie("access_token", params.accessToken, {
     httpOnly: true,
-    sameSite: "lax",
+    sameSite: cookieSameSite(),
     secure: isProduction(),
     path: "/",
     maxAge: ACCESS_TOKEN_MAX_AGE_SECONDS,
   });
   reply.setCookie("refresh_token", params.refreshToken, {
     httpOnly: true,
-    sameSite: "lax",
+    sameSite: cookieSameSite(),
     secure: isProduction(),
     path: "/api/auth",
     expires: params.refreshTokenExpiresAt,
   });
   reply.setCookie("csrf_token", generateOpaqueToken(), {
     httpOnly: false,
-    sameSite: "lax",
+    sameSite: cookieSameSite(),
     secure: isProduction(),
     path: "/",
     expires: params.refreshTokenExpiresAt,
@@ -62,14 +74,14 @@ export function setChildSessionCookies(
 ): void {
   reply.setCookie("access_token", params.accessToken, {
     httpOnly: true,
-    sameSite: "lax",
+    sameSite: cookieSameSite(),
     secure: isProduction(),
     path: "/",
     maxAge: params.expiresInSeconds,
   });
   reply.setCookie("csrf_token", generateOpaqueToken(), {
     httpOnly: false,
-    sameSite: "lax",
+    sameSite: cookieSameSite(),
     secure: isProduction(),
     path: "/",
     maxAge: params.expiresInSeconds,
