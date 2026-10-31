@@ -16,6 +16,8 @@ function toChildProfile(child: {
   supervisionScoreMinimum: number;
   categoryThresholdOverrides: unknown;
   dailyLimitMinutes: number | null;
+  structuredLearningModeEnabled: boolean;
+  structuredLearningGateEnforced: boolean;
   createdAt: Date;
   updatedAt: Date;
   archivedAt: Date | null;
@@ -31,6 +33,8 @@ function toChildProfile(child: {
     supervisionScoreMinimum: child.supervisionScoreMinimum,
     categoryThresholdOverrides: child.categoryThresholdOverrides as ChildProfile["categoryThresholdOverrides"],
     dailyLimitMinutes: child.dailyLimitMinutes,
+    structuredLearningModeEnabled: child.structuredLearningModeEnabled,
+    structuredLearningGateEnforced: child.structuredLearningGateEnforced,
     createdAt: child.createdAt.toISOString(),
     updatedAt: child.updatedAt.toISOString(),
     archivedAt: child.archivedAt?.toISOString() ?? null,
@@ -74,6 +78,8 @@ export async function createChild(
       supervisionScoreMinimum: input.supervisionScoreMinimum,
       categoryThresholdOverrides: input.categoryThresholdOverrides,
       dailyLimitMinutes: input.dailyLimitMinutes,
+      structuredLearningModeEnabled: input.structuredLearningModeEnabled,
+      structuredLearningGateEnforced: input.structuredLearningGateEnforced,
     },
   });
 
@@ -109,6 +115,8 @@ export async function updateChild(
       supervisionScoreMinimum: input.supervisionScoreMinimum,
       categoryThresholdOverrides: input.categoryThresholdOverrides,
       dailyLimitMinutes: input.dailyLimitMinutes,
+      structuredLearningModeEnabled: input.structuredLearningModeEnabled,
+      structuredLearningGateEnforced: input.structuredLearningGateEnforced,
     },
   });
 

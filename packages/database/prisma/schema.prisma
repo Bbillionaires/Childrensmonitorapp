@@ -19,6 +19,7 @@ datasource db {
 enum UserRole {
   PARENT
   ADMIN
+  SCHOOL_ADMIN
 }
 
 model User {
@@ -35,6 +36,7 @@ model User {
   lastLoginAt         DateTime?
 
   parentAccount       ParentAccount?
+  schoolAdminAccount  SchoolAdminAccount?
   auditLogs           AuditLog[]
   passwordResetTokens PasswordResetToken[]
   refreshTokens       RefreshToken[]
@@ -89,6 +91,14 @@ model ParentAccount {
   contentSubmissions ContentSubmission[]
   subscription       ParentSubscription?
 
+  // Milestone 11: a parent whose access comes from a school's seat-based subscription rather
+  // than (or in addition to — a personal subscription is left alone if they have one) their
+  // own. Entitlement checks (subscription-gate.ts) treat "on an entitled school's seat" as an
+  // alternative to "has an entitled ParentSubscription", never a replacement for the column.
+  schoolAccountId    String?
+  schoolAccount      SchoolAccount?    @relation(fields: [schoolAccountId], references: [id], onDelete: SetNull)
+  acceptedSchoolSeatInvite SchoolSeatInvite?
+
   @@map("parent_accounts")
 }
 
@@ -113,6 +123,12 @@ model Child {
   supervisionScoreMinimum     Int       @default(900)
   categoryThresholdOverrides  Json?
   dailyLimitMinutes           Int?
+  // Milestone 11: opt-in structured learning queue (see LearningQueueState) — off by default,
+  // so every child not explicitly enrolled keeps today's free-choice approved library exactly
+  // as it was. gateEnforced only matters while the mode itself is enabled: hard-locks the next
+  // fun videos behind the required learning video rather than just suggesting it.
+  structuredLearningModeEnabled   Boolean @default(false)
+  structuredLearningGateEnforced  Boolean @default(true)
   createdAt                   DateTime  @default(now())
   updatedAt                   DateTime  @updatedAt
   archivedAt                  DateTime?
@@ -125,6 +141,7 @@ model Child {
   safetyAlerts         SafetyAlert[]
   parentReports        ParentReport[]
   searchRequests       SearchRequest[]
+  learningQueueStates  LearningQueueState[]
 
   @@index([parentAccountId])
   @@map("children")
@@ -151,6 +168,9 @@ model Device {
 
   refreshTokens    RefreshToken[]
   viewingHistory   ViewingHistory[]
+  // Milestone 11: one handoff session = one Device row (see child-session-service.ts's own
+  // comment on this) = one fresh structured-learning-queue decay, started lazily on first use.
+  learningQueueState LearningQueueState?
 
   @@index([parentAccountId])
   @@index([childId])
@@ -350,6 +370,15 @@ model ParentApproval {
   @@map("parent_approvals")
 }
 
+enum SchoolSubject {
+  MATH
+  READING
+  SCIENCE
+  SOCIAL_STUDIES
+  LANGUAGE_ARTS
+  OTHER
+}
+
 model ChildContentPermission {
   id            String         @id @default(cuid())
   childId       String
@@ -359,6 +388,12 @@ model ChildContentPermission {
   grantedAt     DateTime       @default(now())
   grantedViaId  String         @unique
   grantedVia    ParentApproval @relation(fields: [grantedViaId], references: [id], onDelete: Cascade)
+  // Milestone 11: manually tagged by whoever approves the content (see approval-service.ts),
+  // not AI-inferred. The structured learning queue (LearningQueueState) reads these two fields
+  // directly off the grant a child's library already queries, rather than joining back through
+  // ParentApproval for them.
+  isLearningContent Boolean      @default(false)
+  subject           SchoolSubject?
 
   @@unique([childId, contentId])
   @@index([childId])
@@ -386,6 +421,27 @@ model ViewingHistory {
   @@index([childId])
   @@index([contentId])
   @@map("viewing_history")
+}
+
+// Milestone 11: per-(child, device-handoff-session) decay state for the structured learning
+// queue — see SCHOOL_SEATS.md. A new Device row (a new handoff) has no matching row here yet,
+// so `getOrCreateQueueState` lazily creates one at stepIndex 0, which is exactly how "the
+// 3-fun-then-1-learning arc restarts every new session" is implemented: there is deliberately
+// no cross-session persistence, only cross-request persistence *within* one still-live Device.
+model LearningQueueState {
+  id               String   @id @default(cuid())
+  deviceId         String   @unique
+  device           Device   @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  childId          String
+  child            Child    @relation(fields: [childId], references: [id], onDelete: Cascade)
+  // 0 -> 3 fun videos before a learning video is due, 1 -> 2, 2+ -> 1 (holds for the rest of
+  // this session once it gets there — see learning-queue-service.ts's FUN_QUOTA_BY_STEP).
+  stepIndex        Int      @default(0)
+  funWatchedInStep Int      @default(0)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@map("learning_queue_states")
 }
 
 model ScreenTimeRule {
@@ -658,4 +714,73 @@ model ApiUsageLog {
 
   @@index([apiClientId, createdAt])
   @@map("api_usage_logs")
+}
+
+// ---------------------------------------------------------------------------
+// School seats (Milestone 11) — a THIRD, independent Stripe subscription besides a parent's
+// own and a commercial API client's: a school pays a seat-based monthly subscription (Stripe
+// subscription `quantity` = seats purchased) and distributes those seats to parents by email
+// invite. A parent occupying a seat is never personally charged — their entitlement derives
+// from SchoolAccount.status via ParentAccount.schoolAccountId (see subscription-gate.ts), not
+// from their own ParentSubscription. See SCHOOL_SEATS.md.
+// ---------------------------------------------------------------------------
+
+// A school's own login identity — mirrors ParentAccount's relationship to User exactly, kept
+// as a fully separate profile type (never a parent, never a child) per
+// ARCHITECTURE.md's RBAC model.
+model SchoolAdminAccount {
+  id              String        @id @default(cuid())
+  userId          String        @unique
+  user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  schoolAccountId String
+  schoolAccount   SchoolAccount @relation(fields: [schoolAccountId], references: [id], onDelete: Cascade)
+  createdAt       DateTime      @default(now())
+
+  @@map("school_admin_accounts")
+}
+
+model SchoolAccount {
+  id                   String             @id @default(cuid())
+  name                 String
+  contactEmail         String             @unique
+  stripeCustomerId     String?            @unique
+  stripeSubscriptionId String?            @unique
+  status               SubscriptionStatus @default(INCOMPLETE)
+  // Always set from the Stripe subscription's own quantity at webhook time, never trusted
+  // from a client request — see billing-service.ts's applySubscriptionEvent school branch.
+  seatCount            Int                @default(0)
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+
+  admins        SchoolAdminAccount[]
+  parentAccounts ParentAccount[]
+  seatInvites   SchoolSeatInvite[]
+
+  @@map("school_accounts")
+}
+
+enum SchoolSeatInviteStatus {
+  PENDING
+  ACCEPTED
+  REVOKED
+  EXPIRED
+}
+
+// Only a SHA-256 hash of the raw invite token is ever stored — same "shown once" discipline as
+// PasswordResetToken/ApiKey — the raw token exists only in the email sent to the invited parent.
+model SchoolSeatInvite {
+  id                       String                 @id @default(cuid())
+  schoolAccountId          String
+  schoolAccount            SchoolAccount          @relation(fields: [schoolAccountId], references: [id], onDelete: Cascade)
+  email                    String
+  tokenHash                String                 @unique
+  status                   SchoolSeatInviteStatus @default(PENDING)
+  createdAt                DateTime               @default(now())
+  expiresAt                DateTime
+  acceptedAt               DateTime?
+  acceptedByParentAccountId String?               @unique
+  acceptedByParentAccount  ParentAccount?          @relation(fields: [acceptedByParentAccountId], references: [id], onDelete: SetNull)
+
+  @@index([schoolAccountId])
+  @@map("school_seat_invites")
 }

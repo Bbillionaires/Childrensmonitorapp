@@ -23,8 +23,18 @@ export const childSessionClaimsSchema = z.object({
 });
 export type ChildSessionClaims = z.infer<typeof childSessionClaimsSchema>;
 
+// Milestone 11: a school admin's own identity — never a parent or child, a fully separate
+// profile type (see SchoolAdminAccount) the same way ParentAccount and Child are kept apart.
+export const schoolAdminSessionClaimsSchema = z.object({
+  role: z.literal("SCHOOL_ADMIN"),
+  userId: z.string(),
+  schoolAccountId: z.string(),
+});
+export type SchoolAdminSessionClaims = z.infer<typeof schoolAdminSessionClaimsSchema>;
+
 export const sessionClaimsSchema = z.discriminatedUnion("role", [
   parentSessionClaimsSchema,
   childSessionClaimsSchema,
+  schoolAdminSessionClaimsSchema,
 ]);
 export type SessionClaims = z.infer<typeof sessionClaimsSchema>;

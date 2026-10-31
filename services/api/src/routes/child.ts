@@ -13,6 +13,7 @@ import {
   getPlaybackInfo,
   recordPlaybackProgress,
 } from "../services/child-library-service.js";
+import { getLearningQueueStatus, LearningGateError } from "../services/learning-queue-service.js";
 import { NotFoundError } from "../lib/errors.js";
 
 /**
@@ -84,10 +85,22 @@ export default async function childRoutes(fastify: FastifyInstance, opts: { env:
         return reply.send(playback);
       } catch (error) {
         if (error instanceof NotFoundError) return reply.code(404).send({ error: error.message });
+        if (error instanceof LearningGateError) {
+          return reply.code(409).send({ error: error.message, code: "LEARNING_VIDEO_REQUIRED" });
+        }
         throw error;
       }
     },
   );
+
+  // Milestone 11 — see SCHOOL_SEATS.md. Returns {enabled:false, ...} rather than 404/empty
+  // when structured mode is off for this child, so the web/child player can always call it
+  // unconditionally and branch on `enabled` client-side.
+  fastify.get("/learning-queue", async (request, reply) => {
+    const claims = request.sessionClaims as ChildSessionClaims;
+    const status = await getLearningQueueStatus(claims.childId, claims.deviceId);
+    return reply.send(status);
+  });
 
   // POST (mutating, so CSRF-guarded like every other child route that changes state), but a
   // progress ping is routine telemetry rather than a safety-relevant decision — same looser

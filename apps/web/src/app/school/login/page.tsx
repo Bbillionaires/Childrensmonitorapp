@@ -1,0 +1,78 @@
+"use client";
+
+import { useState, type FormEvent } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { schoolLoginRequestSchema } from "@app/types";
+import { ApiError, apiFetch } from "@/lib/api";
+import { AuthCard } from "@/components/auth-card";
+
+export default function SchoolLoginPage() {
+  const router = useRouter();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  async function handleSubmit(event: FormEvent) {
+    event.preventDefault();
+    setError(null);
+
+    const parsed = schoolLoginRequestSchema.safeParse({ email, password });
+    if (!parsed.success) {
+      setError("Please check your details");
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      await apiFetch("/api/schools/login", { method: "POST", body: parsed.data });
+      router.push("/school");
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Something went wrong");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <AuthCard title="School sign in" subtitle="Manage your sponsored seats">
+      <form onSubmit={handleSubmit} className="space-y-4">
+        {error && <p className="alert-error">{error}</p>}
+        <div>
+          <label className="field-label" htmlFor="email">Email</label>
+          <input
+            id="email"
+            type="email"
+            className="field-input"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            autoComplete="email"
+            required
+          />
+        </div>
+        <div>
+          <label className="field-label" htmlFor="password">Password</label>
+          <input
+            id="password"
+            type="password"
+            className="field-input"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            autoComplete="current-password"
+            required
+          />
+        </div>
+        <button type="submit" disabled={submitting} className="btn-primary w-full">
+          {submitting ? "Signing in…" : "Sign in"}
+        </button>
+        <p className="text-center text-sm text-slate-500">
+          New school?{" "}
+          <Link href="/school/register" className="font-medium text-brand-600 hover:underline">
+            Register
+          </Link>
+        </p>
+      </form>
+    </AuthCard>
+  );
+}

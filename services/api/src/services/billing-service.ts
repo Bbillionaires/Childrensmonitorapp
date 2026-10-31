@@ -135,6 +135,34 @@ export async function applySubscriptionEvent(emailSender: EmailSender, event: Su
     return;
   }
 
+  if (event.ownerKind === "school") {
+    // Always an update, never an upsert: registerSchoolAdmin creates the SchoolAccount row at
+    // registration, well before any checkout exists — the same assumption the api_client
+    // branch below makes (signUpApiClient's upsert-by-email always precedes its checkout too).
+    // seatCount always comes from Stripe's own subscription quantity at event time, never
+    // trusted from any client-supplied value — see school-service.ts's inviteParentToSchool,
+    // which re-checks the seat limit against this column, not against what an admin *asked*
+    // to buy.
+    await prisma.schoolAccount.update({
+      where: { id: event.ownerId },
+      data: {
+        stripeCustomerId: event.stripeCustomerId,
+        stripeSubscriptionId: event.stripeSubscriptionId,
+        status: event.status,
+        seatCount: event.quantity,
+      },
+    });
+
+    await writeAuditLog(prisma, {
+      actorRole: "SYSTEM",
+      action: "SCHOOL_SUBSCRIPTION_STATUS_CHANGED",
+      targetType: "SchoolAccount",
+      targetId: event.ownerId,
+      metadata: { status: event.status, seatCount: event.quantity },
+    });
+    return;
+  }
+
   const apiClient = await prisma.apiClient.update({
     where: { id: event.ownerId },
     data: {

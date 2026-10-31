@@ -4,9 +4,10 @@ import {
   InvalidSessionTokenError,
   assertChildSession,
   assertParentSession,
+  assertSchoolAdminSession,
   verifyAccessToken,
 } from "@app/auth";
-import type { ChildSessionClaims, ParentSessionClaims, SessionClaims } from "@app/types";
+import type { ChildSessionClaims, ParentSessionClaims, SchoolAdminSessionClaims, SessionClaims } from "@app/types";
 import type { Env } from "@app/config";
 
 declare module "fastify" {
@@ -67,6 +68,19 @@ export default fp(async function authPlugin(fastify: FastifyInstance, opts: { en
     },
   );
 
+  fastify.decorate(
+    "requireSchoolAdminSession",
+    async function requireSchoolAdminSession(request: FastifyRequest, reply: FastifyReply) {
+      try {
+        const claims = decodeSession(request);
+        assertSchoolAdminSession(claims);
+        request.sessionClaims = claims;
+      } catch (error) {
+        return reply.code(401).send({ error: (error as Error).message });
+      }
+    },
+  );
+
   /** Double-submit CSRF check for cookie-authenticated mutating requests. */
   fastify.decorate(
     "requireCsrfHeader",
@@ -88,8 +102,9 @@ declare module "fastify" {
   interface FastifyInstance {
     requireParentSession: (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
     requireChildSession: (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
+    requireSchoolAdminSession: (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
     requireCsrfHeader: (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
   }
 }
 
-export type { ChildSessionClaims, ParentSessionClaims };
+export type { ChildSessionClaims, ParentSessionClaims, SchoolAdminSessionClaims };

@@ -30,9 +30,17 @@ export default async function parentRoutes(fastify: FastifyInstance, opts: { env
     const claims = request.sessionClaims as ParentSessionClaims;
     const user = await prisma.user.findUnique({
       where: { id: claims.userId },
-      include: { parentAccount: { include: { subscription: true } } },
+      include: { parentAccount: { include: { subscription: true, schoolAccount: true } } },
     });
     if (!user?.parentAccount) return reply.code(404).send({ error: "Account not found" });
+
+    // Milestone 11: a parent on a school seat has no personal ParentSubscription row at all
+    // (they're never charged — see school-service.ts's acceptSchoolSeatInvite), so the web
+    // app's own "am I entitled" check (same ACTIVE/TRIALING test the server-side gate in
+    // subscription-gate.ts uses) needs this to reflect effective access, not just a personal
+    // subscription that may not exist. A personal subscription always takes precedence when
+    // both exist, since it's the more specific of the two.
+    const effectiveStatus = user.parentAccount.subscription?.status ?? user.parentAccount.schoolAccount?.status ?? null;
 
     return reply.send({
       id: user.id,
@@ -42,7 +50,7 @@ export default async function parentRoutes(fastify: FastifyInstance, opts: { env
       mfaEnabled: user.mfaEnabled,
       pinConfigured: Boolean(user.pinHash),
       createdAt: user.createdAt.toISOString(),
-      subscriptionStatus: user.parentAccount.subscription?.status ?? null,
+      subscriptionStatus: effectiveStatus,
     });
   });
 

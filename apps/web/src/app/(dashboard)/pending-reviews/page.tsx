@@ -2,17 +2,33 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import type { ApprovalDecisionValue, ChildContentReviewItem } from "@app/types";
+import type { ApprovalDecisionValue, ChildContentReviewItem, SchoolSubjectValue } from "@app/types";
 import { apiFetch } from "@/lib/api";
 import { useChildren } from "@/lib/use-children";
 import { ContentSubmitForm } from "@/components/content-submit-form";
 import { ContentCard } from "@/components/content-card";
+
+const SUBJECT_OPTIONS: { value: SchoolSubjectValue; label: string }[] = [
+  { value: "MATH", label: "Math" },
+  { value: "READING", label: "Reading" },
+  { value: "SCIENCE", label: "Science" },
+  { value: "SOCIAL_STUDIES", label: "Social Studies" },
+  { value: "LANGUAGE_ARTS", label: "Language Arts" },
+  { value: "OTHER", label: "Other" },
+];
 
 export default function PendingReviewsPage() {
   const children = useChildren();
   const [childId, setChildId] = useState<string>("");
   const [items, setItems] = useState<ChildContentReviewItem[] | null>(null);
   const [decidingId, setDecidingId] = useState<string | null>(null);
+  const [learningTags, setLearningTags] = useState<
+    Record<string, { isLearningContent: boolean; subject: SchoolSubjectValue }>
+  >({});
+
+  function tagFor(contentId: string) {
+    return learningTags[contentId] ?? { isLearningContent: false, subject: "OTHER" as SchoolSubjectValue };
+  }
 
   useEffect(() => {
     if (children && children.length > 0 && !childId) {
@@ -34,9 +50,13 @@ export default function PendingReviewsPage() {
   async function handleDecision(contentId: string, decision: ApprovalDecisionValue) {
     setDecidingId(contentId);
     try {
+      const tag = tagFor(contentId);
       await apiFetch(`/api/parents/children/${childId}/decisions`, {
         method: "POST",
-        body: { contentId, decision },
+        body:
+          decision === "APPROVED"
+            ? { contentId, decision, isLearningContent: tag.isLearningContent, subject: tag.subject }
+            : { contentId, decision },
       });
       await loadQueue(childId);
     } finally {
@@ -101,31 +121,67 @@ export default function PendingReviewsPage() {
       )}
 
       <div className="space-y-3">
-        {items?.map((item) => (
-          <ContentCard
-            key={item.content.id}
-            content={item.content}
-            childId={childId}
-            actions={
-              <>
-                <button
-                  className="btn-primary"
-                  disabled={decidingId === item.content.id}
-                  onClick={() => void handleDecision(item.content.id, "APPROVED")}
-                >
-                  Approve
-                </button>
-                <button
-                  className="btn-secondary"
-                  disabled={decidingId === item.content.id}
-                  onClick={() => void handleDecision(item.content.id, "REJECTED")}
-                >
-                  Reject
-                </button>
-              </>
-            }
-          />
-        ))}
+        {items?.map((item) => {
+          const tag = tagFor(item.content.id);
+          return (
+            <ContentCard
+              key={item.content.id}
+              content={item.content}
+              childId={childId}
+              actions={
+                <div className="flex flex-col gap-2">
+                  <label className="flex items-center gap-2 text-xs text-slate-600">
+                    <input
+                      type="checkbox"
+                      checked={tag.isLearningContent}
+                      onChange={(e) =>
+                        setLearningTags((prev) => ({
+                          ...prev,
+                          [item.content.id]: { ...tag, isLearningContent: e.target.checked },
+                        }))
+                      }
+                    />
+                    Learning content
+                    {tag.isLearningContent && (
+                      <select
+                        className="field-input w-auto py-0.5 text-xs"
+                        value={tag.subject}
+                        onChange={(e) =>
+                          setLearningTags((prev) => ({
+                            ...prev,
+                            [item.content.id]: { ...tag, subject: e.target.value as SchoolSubjectValue },
+                          }))
+                        }
+                      >
+                        {SUBJECT_OPTIONS.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                  </label>
+                  <div className="flex gap-2">
+                    <button
+                      className="btn-primary"
+                      disabled={decidingId === item.content.id}
+                      onClick={() => void handleDecision(item.content.id, "APPROVED")}
+                    >
+                      Approve
+                    </button>
+                    <button
+                      className="btn-secondary"
+                      disabled={decidingId === item.content.id}
+                      onClick={() => void handleDecision(item.content.id, "REJECTED")}
+                    >
+                      Reject
+                    </button>
+                  </div>
+                </div>
+              }
+            />
+          );
+        })}
       </div>
     </div>
   );

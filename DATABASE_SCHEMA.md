@@ -192,6 +192,44 @@ Stripe itself, never hardcoded here.
 - id, apiClientId, apiKeyId, endpoint, contentId (nullable), createdAt — one row per commercial
   API call, the basis for any future usage-based billing or rate-limit reporting.
 
+## Schools and the structured learning queue (Milestone 11)
+
+A third, independent Stripe subscription (see SCHOOL_SEATS.md) alongside ParentSubscription
+and ApiClient — a school pays a seat-based monthly subscription and distributes seats to
+parents by email invite; a parent on a seat is never personally charged.
+
+### SchoolAdminAccount
+- A school's own login identity — mirrors ParentAccount's relationship to User exactly, a
+  fully separate profile type (never a parent or child).
+- id, userId (unique), schoolAccountId, createdAt
+
+### SchoolAccount
+- id, name, contactEmail (unique), stripeCustomerId (unique, nullable), stripeSubscriptionId
+  (unique, nullable), status (same SubscriptionStatus enum as ParentSubscription/ApiClient),
+  seatCount (always set from Stripe's own subscription quantity at webhook time, never
+  trusted from a client request)
+
+### SchoolSeatInvite
+- id, schoolAccountId, email, tokenHash (unique — only a SHA-256 hash of the raw invite token
+  is ever stored, same discipline as PasswordResetToken/ApiKey), status (enum:
+  PENDING/ACCEPTED/REVOKED/EXPIRED), createdAt, expiresAt, acceptedAt,
+  acceptedByParentAccountId (unique, nullable)
+- `ParentAccount.schoolAccountId` (nullable) is set on acceptance — from then on, that
+  parent's entitlement derives from SchoolAccount.status instead of (or alongside) a personal
+  ParentSubscription; see subscription-gate.ts.
+
+### LearningQueueState
+- Per-`(child, device-handoff-session)` decay state for the opt-in structured learning queue:
+  id, deviceId (unique — one row per Device, and a new handoff is a new Device row, which is
+  exactly how the decay resets each session with no extra bookkeeping), childId, stepIndex
+  (0/1/2+, mapping to a fun-video quota of 3/2/1 before a learning video is due),
+  funWatchedInStep, createdAt, updatedAt
+- `Child.structuredLearningModeEnabled` / `structuredLearningGateEnforced` are the two
+  independent per-child toggles that turn this on and decide whether it hard-gates playback.
+- `ChildContentPermission.isLearningContent` / `subject` (enum: MATH/READING/SCIENCE/
+  SOCIAL_STUDIES/LANGUAGE_ARTS/OTHER) are set manually by whoever approves the content — never
+  AI-inferred — and are what the queue reads to tell fun from learning content.
+
 ## Cross-cutting
 
 Every table has `createdAt`; mutable tables have `updatedAt`. Soft-delete (`archivedAt` /

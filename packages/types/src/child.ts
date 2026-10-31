@@ -26,6 +26,10 @@ export const childCreateRequestSchema = z.object({
   supervisionScoreMinimum: z.number().int().min(0).max(1000).default(900),
   categoryThresholdOverrides: categoryThresholdOverridesSchema.optional(),
   dailyLimitMinutes: z.number().int().min(0).max(24 * 60).optional(),
+  // Milestone 11 — see SCHOOL_SEATS.md. Both default off/relaxed so a child never silently
+  // starts in structured mode just because a sibling field was sent on an unrelated update.
+  structuredLearningModeEnabled: z.boolean().default(false),
+  structuredLearningGateEnforced: z.boolean().default(true),
 });
 export type ChildCreateRequest = z.infer<typeof childCreateRequestSchema>;
 
@@ -43,6 +47,8 @@ export const childProfileSchema = z.object({
   supervisionScoreMinimum: z.number(),
   categoryThresholdOverrides: categoryThresholdOverridesSchema.nullable(),
   dailyLimitMinutes: z.number().nullable(),
+  structuredLearningModeEnabled: z.boolean(),
+  structuredLearningGateEnforced: z.boolean(),
   createdAt: z.string(),
   updatedAt: z.string(),
   archivedAt: z.string().nullable(),

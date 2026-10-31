@@ -17,6 +17,8 @@ export interface ChildFormValues {
   interests: string;
   supervisionScoreMinimum: number;
   dailyLimitMinutes: string;
+  structuredLearningModeEnabled: boolean;
+  structuredLearningGateEnforced: boolean;
 }
 
 const EMPTY_VALUES: ChildFormValues = {
@@ -25,6 +27,8 @@ const EMPTY_VALUES: ChildFormValues = {
   interests: "",
   supervisionScoreMinimum: 900,
   dailyLimitMinutes: "",
+  structuredLearningModeEnabled: false,
+  structuredLearningGateEnforced: true,
 };
 
 export function ChildForm({
@@ -63,6 +67,8 @@ export function ChildForm({
         contentCategories: [],
         supervisionScoreMinimum: values.supervisionScoreMinimum,
         dailyLimitMinutes: values.dailyLimitMinutes ? Number(values.dailyLimitMinutes) : undefined,
+        structuredLearningModeEnabled: values.structuredLearningModeEnabled,
+        structuredLearningGateEnforced: values.structuredLearningGateEnforced,
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
@@ -139,6 +145,31 @@ export function ChildForm({
           value={values.dailyLimitMinutes}
           onChange={(e) => setValues((v) => ({ ...v, dailyLimitMinutes: e.target.value }))}
         />
+      </div>
+      <div className="rounded border border-slate-200 p-3 space-y-2">
+        <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
+          <input
+            type="checkbox"
+            checked={values.structuredLearningModeEnabled}
+            onChange={(e) => setValues((v) => ({ ...v, structuredLearningModeEnabled: e.target.checked }))}
+          />
+          Structured Learning Mode
+        </label>
+        <p className="text-xs text-slate-500">
+          Alternates approved fun videos with approved learning videos (tag content as learning when
+          approving it). Starts each new device session at 3 fun videos before the first learning
+          video is due, then 2, then 1 — holding at 1-for-1 after that.
+        </p>
+        {values.structuredLearningModeEnabled && (
+          <label className="flex items-center gap-2 text-sm text-slate-700">
+            <input
+              type="checkbox"
+              checked={values.structuredLearningGateEnforced}
+              onChange={(e) => setValues((v) => ({ ...v, structuredLearningGateEnforced: e.target.checked }))}
+            />
+            Require the learning video (lock fun videos until it&apos;s watched)
+          </label>
+        )}
       </div>
       <div className="flex gap-2">
         <button type="submit" disabled={submitting} className="btn-primary">

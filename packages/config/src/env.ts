@@ -31,6 +31,10 @@ const envSchema = z.object({
   STRIPE_WEBHOOK_SECRET: z.string().optional(),
   STRIPE_PARENT_PRICE_ID: z.string().optional(),
   STRIPE_API_CLIENT_PRICE_ID: z.string().optional(),
+
+  // Milestone 11 — a per-seat monthly price; Stripe multiplies it by the seat quantity a
+  // school purchases at checkout. See SCHOOL_SEATS.md.
+  STRIPE_SCHOOL_PRICE_ID: z.string().optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;

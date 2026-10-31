@@ -1,5 +1,10 @@
 import { prisma, type ApprovalSource } from "@app/database";
-import type { ApprovalDecisionValue, BulkApprovalResultItem, ChildContentReviewItem } from "@app/types";
+import type {
+  ApprovalDecisionValue,
+  BulkApprovalResultItem,
+  ChildContentReviewItem,
+  SchoolSubjectValue,
+} from "@app/types";
 import { NotFoundError } from "../lib/errors.js";
 import { writeAuditLog } from "./audit.js";
 import { toContentSummary } from "./content-service.js";
@@ -71,6 +76,11 @@ export async function decideApproval(
   decision: ApprovalDecisionValue,
   notes: string | undefined,
   source: ApprovalSource = "MANUAL",
+  // Milestone 11 — manually set by whoever approves (never inferred), consumed by the
+  // structured learning queue (see learning-queue-service.ts). Meaningless on a rejection,
+  // so they're simply not written in that branch below.
+  isLearningContent = false,
+  subject?: SchoolSubjectValue,
 ): Promise<void> {
   await assertOwnedChild(parentAccountId, childId);
 
@@ -99,8 +109,8 @@ export async function decideApproval(
     if (decision === "APPROVED") {
       await tx.childContentPermission.upsert({
         where: { childId_contentId: { childId, contentId } },
-        update: { grantedViaId: approval.id, grantedAt: new Date() },
-        create: { childId, contentId, grantedViaId: approval.id },
+        update: { grantedViaId: approval.id, grantedAt: new Date(), isLearningContent, subject },
+        create: { childId, contentId, grantedViaId: approval.id, isLearningContent, subject },
       });
     } else {
       await tx.childContentPermission.deleteMany({ where: { childId, contentId } });
@@ -130,13 +140,25 @@ export async function bulkDecideApproval(
   contentIds: string[],
   decision: ApprovalDecisionValue,
   notes: string | undefined,
+  isLearningContent = false,
+  subject?: SchoolSubjectValue,
 ): Promise<BulkApprovalResultItem[]> {
   await assertOwnedChild(parentAccountId, childId);
 
   const results: BulkApprovalResultItem[] = [];
   for (const contentId of contentIds) {
     try {
-      await decideApproval(parentAccountId, actorUserId, childId, contentId, decision, notes);
+      await decideApproval(
+        parentAccountId,
+        actorUserId,
+        childId,
+        contentId,
+        decision,
+        notes,
+        "MANUAL",
+        isLearningContent,
+        subject,
+      );
       results.push({ contentId, ok: true });
     } catch (error) {
       results.push({

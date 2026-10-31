@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { approvalDecisionSchema, contentSummarySchema } from "./content.js";
+import { approvalDecisionSchema, contentSummarySchema, schoolSubjectSchema } from "./content.js";
 
 export const playlistImportRequestSchema = z.object({
   url: z.string().url().refine((value) => value.startsWith("https://"), {
@@ -29,6 +29,8 @@ export const bulkApprovalRequestSchema = z.object({
   contentIds: z.array(z.string()).min(1).max(200),
   decision: approvalDecisionSchema,
   notes: z.string().trim().max(500).optional(),
+  isLearningContent: z.boolean().optional(),
+  subject: schoolSubjectSchema.optional(),
 });
 export type BulkApprovalRequest = z.infer<typeof bulkApprovalRequestSchema>;
 

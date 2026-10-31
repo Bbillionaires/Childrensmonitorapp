@@ -20,6 +20,9 @@ import childRoutes from "./routes/child.js";
 import { billingCheckoutRoutes, billingWebhookRoutes } from "./routes/billing.js";
 import v1PublicRoutes from "./routes/v1-public.js";
 import v1AnalyzeRoutes from "./routes/v1-analyze.js";
+import schoolAuthRoutes from "./routes/school-auth.js";
+import schoolAdminRoutes from "./routes/school-admin.js";
+import schoolInviteRoutes from "./routes/school-invites.js";
 import { createEmailSender } from "./services/email.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
@@ -84,6 +87,36 @@ export async function buildApp(): Promise<FastifyInstance> {
       await billingCheckoutRoutes(instance, { env, billingClient });
     },
     { prefix: "/api/billing" },
+  );
+
+  // Milestone 11: a parent viewing/accepting a school's seat invite — same reasoning as
+  // billingCheckoutRoutes above, a separate ungated /api/parents instance so it stays
+  // reachable for a parent with no subscription at all (accepting an invite is exactly how
+  // one gets entitled in the first place). See school-invites.ts.
+  await app.register(
+    async (instance) => {
+      instance.addHook("preHandler", instance.requireParentSession);
+      await schoolInviteRoutes(instance);
+    },
+    { prefix: "/api/parents" },
+  );
+
+  // Milestone 11: school accounts — a third, independent identity/billing space from
+  // parent/child sessions and the commercial API, see SCHOOL_SEATS.md. /register and /login
+  // are public (no session yet); everything else requires requireSchoolAdminSession.
+  await app.register(
+    async (instance) => {
+      await schoolAuthRoutes(instance, { env });
+    },
+    { prefix: "/api/schools" },
+  );
+
+  await app.register(
+    async (instance) => {
+      instance.addHook("preHandler", instance.requireSchoolAdminSession);
+      await schoolAdminRoutes(instance, { env, billingClient, emailSender });
+    },
+    { prefix: "/api/schools" },
   );
 
   // Stripe calls this directly: no parent/child session, and the exact raw request bytes

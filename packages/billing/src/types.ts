@@ -5,7 +5,7 @@
  * onto the Subscription object Stripe creates from it) so a webhook handler can dispatch to
  * the right table without any Stripe-side customer lookup.
  */
-export type SubscriptionOwnerKind = "parent" | "api_client";
+export type SubscriptionOwnerKind = "parent" | "api_client" | "school";
 
 export const SUBSCRIPTION_STATUSES = [
   "INCOMPLETE",
@@ -30,6 +30,9 @@ export interface CreateCheckoutSessionParams {
    *  Only ever set by the caller for an owner who has never had a subscription before —
    *  this wrapper applies whatever it's given with no eligibility logic of its own. */
   trialPeriodDays?: number;
+  /** Line-item quantity — only ever set by the "school" seat-based checkout path (Stripe
+   *  multiplies the per-seat price by this). Omitted (defaults to 1) for parent/api_client. */
+  quantity?: number;
 }
 
 export interface CheckoutSession {
@@ -44,6 +47,10 @@ export interface SubscriptionEventPayload {
   stripeCustomerId: string;
   stripeSubscriptionId: string;
   status: SubscriptionStatusValue;
+  /** The subscription's own item quantity at event time — only meaningful for "school"
+   *  (seat count); always 1 for parent/api_client. Read from Stripe's event, never trusted
+   *  from anywhere else, so a school's seat count can never be inflated client-side. */
+  quantity: number;
 }
 
 /**

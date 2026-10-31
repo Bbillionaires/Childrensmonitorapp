@@ -10,3 +10,4 @@ export * from "./viewing-history.js";
 export * from "./safety-alert.js";
 export * from "./parent-report.js";
 export * from "./billing.js";
+export * from "./school.js";

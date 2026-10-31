@@ -94,6 +94,9 @@ export default async function contentRoutes(fastify: FastifyInstance, opts: { en
           body.contentId,
           body.decision,
           body.notes,
+          undefined,
+          body.isLearningContent,
+          body.subject,
         );
         return reply.send({ ok: true });
       } catch (error) {
@@ -119,6 +122,8 @@ export default async function contentRoutes(fastify: FastifyInstance, opts: { en
           body.contentIds,
           body.decision,
           body.notes,
+          body.isLearningContent,
+          body.subject,
         );
         return reply.send({ results });
       } catch (error) {

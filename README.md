@@ -22,6 +22,7 @@ proprietary **Supervision Score** safety-rating engine.
 | [SUPERVISION_SCORE.md](./SUPERVISION_SCORE.md) | The safety-rating framework and its versioning |
 | [SECURITY_AND_PRIVACY.md](./SECURITY_AND_PRIVACY.md) | COPPA posture, RBAC, encryption, data minimization |
 | [COMMERCIAL_API.md](./COMMERCIAL_API.md) | The B2B Supervision Score API: signup, auth, rate limits, billing |
+| [SCHOOL_SEATS.md](./SCHOOL_SEATS.md) | School seat-based subscriptions + the structured learning queue |
 | [IMPLEMENTATION_PLAN.md](./IMPLEMENTATION_PLAN.md) | Stack rationale, costs, milestone-by-milestone plan |
 
 ## Repository layout
@@ -142,6 +143,17 @@ signup pages fail honestly when billing isn't configured, and that activating a 
 genuinely unlocks both the dashboard and the API) — the one thing that could not be verified
 here is an actual live Checkout redirect/webhook delivery, which needs a real Stripe account.
 See [COMMERCIAL_API.md](./COMMERCIAL_API.md) for the full API contract and exactly what's real
-vs. what still needs the operator's own Stripe keys. See
+vs. what still needs the operator's own Stripe keys. Milestone 11 adds a third, independent
+Stripe subscription — a school pays a seat-based monthly price and distributes seats to
+parents by email invite, at no cost to the sponsored parent — plus an opt-in structured
+learning queue any parent can turn on per child, alternating approved "fun" videos with
+approved "learning" videos on a decaying schedule (3 fun videos before the first learning
+video, then 2, then 1, holding there for the rest of that device session) that genuinely locks
+the next fun videos behind the required one when its gate-enforcement toggle is on. See
+[SCHOOL_SEATS.md](./SCHOOL_SEATS.md) for the full contract, including what's real, what's
+deliberately out of scope for this pass, and what still needs the operator's own Stripe setup
+(a new per-seat price) — the backend was typechecked and covered by real integration tests,
+but this sandbox had no local Postgres to actually run them against, so run them yourself
+before relying on this in production. See
 [IMPLEMENTATION_PLAN.md](./IMPLEMENTATION_PLAN.md) for what's
 next.

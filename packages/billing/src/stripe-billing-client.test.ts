@@ -103,7 +103,19 @@ describe("extractSubscriptionEvent", () => {
       stripeCustomerId: "cus_123",
       stripeSubscriptionId: "sub_123",
       status: "ACTIVE",
+      quantity: 1,
     });
+  });
+
+  it("reads the seat quantity off the subscription's own line item (for school owner kind)", () => {
+    const result = extractSubscriptionEvent(
+      subscriptionEvent("customer.subscription.updated", {
+        metadata: { ownerKind: "school", ownerId: "school-1" },
+        items: { data: [{ quantity: 25 }] },
+      }),
+    );
+    expect(result?.ownerKind).toBe("school");
+    expect(result?.quantity).toBe(25);
   });
 
   it("maps every Stripe status to this app's SubscriptionStatus enum", () => {

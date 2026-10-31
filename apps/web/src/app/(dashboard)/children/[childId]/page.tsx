@@ -13,6 +13,8 @@ function toFormValues(child: ChildProfile): ChildFormValues {
     interests: child.interests.join(", "),
     supervisionScoreMinimum: child.supervisionScoreMinimum,
     dailyLimitMinutes: child.dailyLimitMinutes ? String(child.dailyLimitMinutes) : "",
+    structuredLearningModeEnabled: child.structuredLearningModeEnabled,
+    structuredLearningGateEnforced: child.structuredLearningGateEnforced,
   };
 }
 

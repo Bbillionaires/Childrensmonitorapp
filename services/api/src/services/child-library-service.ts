@@ -4,6 +4,11 @@ import type { ChildLibraryResponse, ChildPlaylistDetailResponse, PlaybackInfo } 
 import { getProviderRegistry } from "./provider-registry.js";
 import { toContentSummary } from "./content-service.js";
 import { NotFoundError } from "../lib/errors.js";
+import {
+  assertPlaybackAllowed,
+  recordWatchedContent,
+  WATCHED_COMPLETION_THRESHOLD,
+} from "./learning-queue-service.js";
 
 /**
  * Everything approved for this child, grouped by type. Derived entirely from
@@ -136,6 +141,12 @@ export async function getPlaybackInfo(
     throw new NotFoundError("This content is not approved for this child");
   }
 
+  // Milestone 11: re-checked at the exact moment of playback, same principle as the
+  // permission check just above — a parent toggling the gate takes effect immediately, not
+  // just on the next library load. Only ever throws when structured mode AND its gate are
+  // both on for this child; see learning-queue-service.ts.
+  await assertPlaybackAllowed(childId, deviceId, permission.isLearningContent);
+
   const { content } = permission;
   const playlistItem = playlistId
     ? await prisma.playlistItem.findFirst({ where: { playlistId, contentId } })
@@ -207,4 +218,20 @@ export async function recordPlaybackProgress(childId: string, viewingHistoryId: 
     where: { id: viewingHistoryId },
     data: { durationWatchedSeconds, completionPercentage },
   });
+
+  // Milestone 11: advance the structured learning queue the moment this crosses the
+  // "watched" threshold, not on every ping — only the transition matters, so a ping that
+  // arrives after the threshold was already passed (the player keeps pinging while paused on
+  // a finished video, say) must not double-advance the decay.
+  const justCrossedThreshold =
+    row.completionPercentage < WATCHED_COMPLETION_THRESHOLD && completionPercentage >= WATCHED_COMPLETION_THRESHOLD;
+  if (justCrossedThreshold && row.deviceId) {
+    const permission = await prisma.childContentPermission.findUnique({
+      where: { childId_contentId: { childId, contentId: row.contentId } },
+      select: { isLearningContent: true },
+    });
+    if (permission) {
+      await recordWatchedContent(childId, row.deviceId, permission.isLearningContent);
+    }
+  }
 }

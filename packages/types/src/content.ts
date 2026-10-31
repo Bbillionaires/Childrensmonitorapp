@@ -33,10 +33,17 @@ export type ContentSummary = z.infer<typeof contentSummarySchema>;
 export const approvalDecisionSchema = z.enum(["APPROVED", "REJECTED"]);
 export type ApprovalDecisionValue = z.infer<typeof approvalDecisionSchema>;
 
+// Milestone 11: manually set by whoever approves the content, consumed by the structured
+// learning queue (see learning-queue-service.ts) — never inferred automatically.
+export const schoolSubjectSchema = z.enum(["MATH", "READING", "SCIENCE", "SOCIAL_STUDIES", "LANGUAGE_ARTS", "OTHER"]);
+export type SchoolSubjectValue = z.infer<typeof schoolSubjectSchema>;
+
 export const approvalRequestSchema = z.object({
   contentId: z.string(),
   decision: approvalDecisionSchema,
   notes: z.string().trim().max(500).optional(),
+  isLearningContent: z.boolean().optional(),
+  subject: schoolSubjectSchema.optional(),
 });
 export type ApprovalRequest = z.infer<typeof approvalRequestSchema>;
 

@@ -63,7 +63,7 @@ export class StripeBillingClient {
     const session = await this.stripe.checkout.sessions.create({
       mode: "subscription",
       customer_email: params.customerEmail,
-      line_items: [{ price: params.priceId, quantity: 1 }],
+      line_items: [{ price: params.priceId, quantity: params.quantity ?? 1 }],
       success_url: params.successUrl,
       cancel_url: params.cancelUrl,
       client_reference_id: `${params.ownerKind}:${params.ownerId}`,
@@ -111,7 +111,7 @@ export function extractSubscriptionEvent(event: Stripe.Event): SubscriptionEvent
   const subscription = event.data.object as Stripe.Subscription;
   const ownerKind = subscription.metadata?.ownerKind as SubscriptionOwnerKind | undefined;
   const ownerId = subscription.metadata?.ownerId;
-  if (ownerKind !== "parent" && ownerKind !== "api_client") return undefined;
+  if (ownerKind !== "parent" && ownerKind !== "api_client" && ownerKind !== "school") return undefined;
   if (!ownerId) return undefined;
 
   return {
@@ -120,6 +120,7 @@ export function extractSubscriptionEvent(event: Stripe.Event): SubscriptionEvent
     stripeCustomerId: customerIdOf(subscription.customer),
     stripeSubscriptionId: subscription.id,
     status: mapStripeStatus(subscription.status),
+    quantity: subscription.items?.data[0]?.quantity ?? 1,
   };
 }
 

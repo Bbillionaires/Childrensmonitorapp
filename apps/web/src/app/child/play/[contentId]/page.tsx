@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import type { PlaybackInfo } from "@app/types";
-import { apiFetch } from "@/lib/api";
+import { ApiError, apiFetch } from "@/lib/api";
 
 const PROGRESS_PING_INTERVAL_MS = 10_000;
 
@@ -53,20 +53,40 @@ export default function ChildPlayPage() {
 
   const [playback, setPlayback] = useState<PlaybackInfo | null>(null);
   const [notFound, setNotFound] = useState(false);
+  const [gated, setGated] = useState(false);
   const [replayNonce, setReplayNonce] = useState(0);
 
   useEffect(() => {
     setPlayback(null);
     setNotFound(false);
+    setGated(false);
     const query = playlistId ? `?playlistId=${playlistId}` : "";
     apiFetch<PlaybackInfo>(`/api/child/content/${params.contentId}/play${query}`)
       .then(setPlayback)
-      .catch(() => setNotFound(true));
+      .catch((err) => {
+        if (err instanceof ApiError && err.statusCode === 409) {
+          setGated(true);
+        } else {
+          setNotFound(true);
+        }
+      });
   }, [params.contentId, playlistId]);
 
   useProgressReporting(playback?.viewingHistoryId);
 
   const backHref = playlistId ? `/child/playlists/${playlistId}` : "/child";
+
+  if (gated) {
+    return (
+      <div className="card text-center">
+        <p className="text-4xl">🔒</p>
+        <p className="mt-2 text-sm text-slate-600">
+          Watch a learning video first to unlock this one!
+        </p>
+        <Link href="/child" className="btn-primary mt-3 inline-flex">Back to Library</Link>
+      </div>
+    );
+  }
 
   if (notFound) {
     return (
