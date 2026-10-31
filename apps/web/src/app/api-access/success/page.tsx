@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { AuthCard } from "@/components/auth-card";
 import { apiFetch } from "@/lib/api";
@@ -15,8 +15,25 @@ const MAX_POLLS = 20; // ~1 minute
  * expecting the key to exist yet — the raw key itself is never shown here or returned by any
  * endpoint; it's emailed once, the same "shown once, never again" discipline as every other
  * secret in this app.
+ *
+ * useSearchParams opts a page out of static prerendering unless wrapped in Suspense (Next
+ * bails the whole build otherwise — see "missing-suspense-with-csr-bailout").
  */
 export default function ApiAccessSuccessPage() {
+  return (
+    <Suspense
+      fallback={
+        <AuthCard title="Supervision Score API" subtitle="Setting up your account">
+          <p className="text-center text-sm text-slate-600">Loading…</p>
+        </AuthCard>
+      }
+    >
+      <ApiAccessSuccessContent />
+    </Suspense>
+  );
+}
+
+function ApiAccessSuccessContent() {
   const searchParams = useSearchParams();
   const apiClientId = searchParams.get("apiClientId");
   const [status, setStatus] = useState<"waiting" | "ready" | "timeout" | "missing">(
