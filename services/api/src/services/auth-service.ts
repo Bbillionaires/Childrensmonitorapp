@@ -175,7 +175,10 @@ export async function requestPasswordReset(
 
 export async function confirmPasswordReset(token: string, newPassword: string): Promise<void> {
   const tokenHash = hashOpaqueToken(token);
-  const resetToken = await prisma.passwordResetToken.findUnique({ where: { tokenHash } });
+  const resetToken = await prisma.passwordResetToken.findUnique({
+    where: { tokenHash },
+    include: { user: true },
+  });
 
   if (!resetToken || resetToken.usedAt || resetToken.expiresAt < new Date()) {
     throw new AuthError("Invalid or expired reset token", 400);
@@ -194,9 +197,16 @@ export async function confirmPasswordReset(token: string, newPassword: string): 
     }),
   ]);
 
+  // This flow is shared by every User role (parent or school admin — see
+  // SchoolAdminAccount's identical relationship to User) since it only ever touches
+  // User.passwordHash; the audit log should reflect who actually reset it, not assume parent.
+  // ADMIN isn't a role this public flow is meant to serve, but the audit log's actorRole
+  // union has no slot for it either — fall back to SYSTEM rather than widening that union
+  // for a case that shouldn't occur in practice.
+  const actorRole = resetToken.user.role === "ADMIN" ? "SYSTEM" : resetToken.user.role;
   await writeAuditLog(prisma, {
     actorUserId: resetToken.userId,
-    actorRole: "PARENT",
+    actorRole,
     action: "PASSWORD_RESET_COMPLETED",
     targetType: "User",
     targetId: resetToken.userId,

@@ -66,6 +66,11 @@ export default function SchoolLoginPage() {
         <button type="submit" disabled={submitting} className="btn-primary w-full">
           {submitting ? "Signing in…" : "Sign in"}
         </button>
+        <p className="text-center text-sm">
+          <Link href="/reset-password?role=school" className="text-brand-600 hover:underline">
+            Forgot password?
+          </Link>
+        </p>
         <p className="text-center text-sm text-slate-500">
           New school?{" "}
           <Link href="/school/register" className="font-medium text-brand-600 hover:underline">

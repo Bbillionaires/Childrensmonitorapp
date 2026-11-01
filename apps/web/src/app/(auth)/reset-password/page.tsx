@@ -1,14 +1,40 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { Suspense, useState, type FormEvent } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { passwordResetConfirmSchema, passwordResetRequestSchema } from "@app/types";
 import { ApiError, apiFetch } from "@/lib/api";
 import { AuthCard } from "@/components/auth-card";
 
+/**
+ * This flow is shared by parents and school admins alike (the backend's password-reset
+ * endpoints operate on User by email regardless of role — see auth-service.ts). The only
+ * thing that differs per role is which login page to return to, carried via ?role=school
+ * from the school login page's "Forgot password?" link (parent is the default, unchanged).
+ *
+ * useSearchParams opts a page out of static prerendering unless wrapped in Suspense — the
+ * same "missing-suspense-with-csr-bailout" fix already applied to /api-access/success.
+ */
 export default function ResetPasswordPage() {
+  return (
+    <Suspense
+      fallback={
+        <AuthCard title="Reset your password">
+          <p className="text-center text-sm text-slate-600">Loading…</p>
+        </AuthCard>
+      }
+    >
+      <ResetPasswordContent />
+    </Suspense>
+  );
+}
+
+function ResetPasswordContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const isSchool = searchParams.get("role") === "school";
+  const loginHref = isSchool ? "/school/login" : "/login";
   const [step, setStep] = useState<"request" | "confirm">("request");
   const [email, setEmail] = useState("");
   const [token, setToken] = useState("");
@@ -52,7 +78,7 @@ export default function ResetPasswordPage() {
     setSubmitting(true);
     try {
       await apiFetch("/api/auth/password-reset/confirm", { method: "POST", body: parsed.data });
-      router.push("/login");
+      router.push(loginHref);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Invalid or expired code");
     } finally {
@@ -81,7 +107,7 @@ export default function ResetPasswordPage() {
             {submitting ? "Sending…" : "Send reset code"}
           </button>
           <p className="text-center text-sm">
-            <Link href="/login" className="text-brand-600 hover:underline">
+            <Link href={loginHref} className="text-brand-600 hover:underline">
               Back to sign in
             </Link>
           </p>
