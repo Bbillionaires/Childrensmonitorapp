@@ -41,3 +41,62 @@ body {
 .alert-success {
   @apply rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700;
 }
+
+/*
+ * Landing-page hero mascot: a continuous, deterministic animation loop (no randomness
+ * anywhere — every value below is a fixed keyframe/delay) so the effect is pixel-identical
+ * on every page load, not just "looks similar." Respects prefers-reduced-motion.
+ */
+.hero-mascot-stage {
+  perspective: 1200px;
+}
+
+.hero-mascot-image {
+  animation: hero-mascot-advance 6s ease-in-out infinite;
+  transform-style: preserve-3d;
+  will-change: transform;
+}
+
+@keyframes hero-mascot-advance {
+  0%,
+  100% {
+    transform: translateZ(0) scale(1) rotateX(0deg) rotateY(0deg);
+    filter: drop-shadow(0 20px 25px rgb(30 58 138 / 0.35));
+  }
+  50% {
+    transform: translateZ(60px) scale(1.06) rotateX(-2deg) rotateY(2deg);
+    filter: drop-shadow(0 40px 45px rgb(30 58 138 / 0.5));
+  }
+}
+
+.hero-star {
+  position: absolute;
+  color: #fde047;
+  text-shadow: 0 0 8px rgb(253 224 71 / 0.8);
+  animation: hero-star-sparkle 5s ease-in-out infinite;
+  will-change: transform, opacity;
+}
+
+/* Sparkle (opacity/scale/rotate) and drift (translate) combined into one keyframe set —
+   two separate animations both touching `transform` would override rather than compose. */
+@keyframes hero-star-sparkle {
+  0% {
+    opacity: 0.25;
+    transform: translate(0, 0) scale(0.7) rotate(0deg);
+  }
+  50% {
+    opacity: 1;
+    transform: translate(8px, -10px) scale(1.15) rotate(20deg);
+  }
+  100% {
+    opacity: 0.25;
+    transform: translate(0, 0) scale(0.7) rotate(0deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-mascot-image,
+  .hero-star {
+    animation: none !important;
+  }
+}
