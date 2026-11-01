@@ -4,6 +4,7 @@ import { useState, type FormEvent } from "react";
 import { setPinRequestSchema } from "@app/types";
 import { ApiError, apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
+import { PasswordField } from "@/components/password-field";
 
 export default function AccountPage() {
   const { parent, refresh } = useAuth();
@@ -88,18 +89,14 @@ export default function AccountPage() {
         <form onSubmit={handleSetPin} className="mt-4 space-y-4">
           {error && <p className="alert-error">{error}</p>}
           {success && <p className="alert-success">{success}</p>}
-          <div>
-            <label className="field-label" htmlFor="currentPassword">Current password</label>
-            <input
-              id="currentPassword"
-              type="password"
-              className="field-input"
-              value={currentPassword}
-              onChange={(e) => setCurrentPassword(e.target.value)}
-              autoComplete="current-password"
-              required
-            />
-          </div>
+          <PasswordField
+            id="currentPassword"
+            label="Current password"
+            value={currentPassword}
+            onChange={setCurrentPassword}
+            autoComplete="current-password"
+            required
+          />
           <div>
             <label className="field-label" htmlFor="pin">New PIN (4–8 digits)</label>
             <input

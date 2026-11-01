@@ -29,9 +29,17 @@ export async function buildApp(): Promise<FastifyInstance> {
   const env = loadEnv();
   const app = Fastify({ logger: env.NODE_ENV !== "test" });
 
-  // Credentials must be sent (cookies) so `credentials: true` is required alongside a
-  // specific origin — never a wildcard `*` with credentialed requests.
-  await app.register(cors, { origin: env.WEB_APP_ORIGIN, credentials: true });
+  // Credentials must be sent (cookies) so an explicit origin list is required alongside
+  // `credentials: true` — never a wildcard `*` with credentialed requests. The web app can be
+  // reached at more than one real domain (a platform-generated URL and a custom domain, say),
+  // so every one of them needs to be an allowed origin, not just WEB_APP_ORIGIN (which stays
+  // the single canonical URL used to build redirect links elsewhere, e.g. Stripe success URLs
+  // and password-reset emails — that usage is unaffected by this list).
+  const allowedOrigins = [
+    env.WEB_APP_ORIGIN,
+    ...(env.ADDITIONAL_CORS_ORIGINS?.split(",").map((origin) => origin.trim()).filter(Boolean) ?? []),
+  ];
+  await app.register(cors, { origin: allowedOrigins, credentials: true });
   await app.register(cookie);
   await app.register(rateLimit, { global: true, max: 200, timeWindow: "1 minute" });
   await app.register(authPlugin, { env });

@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { passwordResetConfirmSchema, passwordResetRequestSchema } from "@app/types";
 import { ApiError, apiFetch } from "@/lib/api";
 import { AuthCard } from "@/components/auth-card";
+import { PasswordField } from "@/components/password-field";
 
 /**
  * This flow is shared by parents and school admins alike (the backend's password-reset
@@ -131,18 +132,14 @@ function ResetPasswordContent() {
             required
           />
         </div>
-        <div>
-          <label className="field-label" htmlFor="newPassword">New password</label>
-          <input
-            id="newPassword"
-            type="password"
-            className="field-input"
-            value={newPassword}
-            onChange={(e) => setNewPassword(e.target.value)}
-            autoComplete="new-password"
-            required
-          />
-        </div>
+        <PasswordField
+          id="newPassword"
+          label="New password"
+          value={newPassword}
+          onChange={setNewPassword}
+          autoComplete="new-password"
+          required
+        />
         <button type="submit" disabled={submitting} className="btn-primary w-full">
           {submitting ? "Resetting…" : "Reset password"}
         </button>

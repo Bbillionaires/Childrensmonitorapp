@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { schoolLoginRequestSchema } from "@app/types";
 import { ApiError, apiFetch } from "@/lib/api";
 import { AuthCard } from "@/components/auth-card";
+import { PasswordField } from "@/components/password-field";
 
 export default function SchoolLoginPage() {
   const router = useRouter();
@@ -51,18 +52,14 @@ export default function SchoolLoginPage() {
             required
           />
         </div>
-        <div>
-          <label className="field-label" htmlFor="password">Password</label>
-          <input
-            id="password"
-            type="password"
-            className="field-input"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            autoComplete="current-password"
-            required
-          />
-        </div>
+        <PasswordField
+          id="password"
+          label="Password"
+          value={password}
+          onChange={setPassword}
+          autoComplete="current-password"
+          required
+        />
         <button type="submit" disabled={submitting} className="btn-primary w-full">
           {submitting ? "Signing in…" : "Sign in"}
         </button>

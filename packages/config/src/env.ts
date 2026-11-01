@@ -12,6 +12,11 @@ const envSchema = z.object({
   JWT_REFRESH_SECRET: z.string().min(16, "JWT_REFRESH_SECRET must be at least 16 characters"),
   API_PORT: z.coerce.number().int().positive().default(4000),
   WEB_APP_ORIGIN: z.string().url().default("http://localhost:3000"),
+  // The web app is reachable at more than one domain (e.g. a platform-generated URL plus a
+  // custom domain, or an apex + www pair) — CORS only ever trusts one exact origin per
+  // request, so every domain users might actually land on needs to be listed here. Comma-
+  // separated; WEB_APP_ORIGIN itself is always trusted and never needs repeating in this list.
+  ADDITIONAL_CORS_ORIGINS: z.string().optional(),
 
   // Optional — required only once the corresponding milestone's feature is exercised.
   // Left unset in Milestone 1; see IMPLEMENTATION_PLAN.md for what each unlocks.

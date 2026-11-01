@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { schoolRegisterRequestSchema } from "@app/types";
 import { ApiError, apiFetch } from "@/lib/api";
 import { AuthCard } from "@/components/auth-card";
+import { PasswordField } from "@/components/password-field";
 
 /**
  * Milestone 11 — see SCHOOL_SEATS.md. A school's own account, a fully separate identity space
@@ -78,21 +79,15 @@ export default function SchoolRegisterPage() {
             required
           />
         </div>
-        <div>
-          <label className="field-label" htmlFor="password">Password</label>
-          <input
-            id="password"
-            type="password"
-            className="field-input"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            autoComplete="new-password"
-            required
-          />
-          <p className="mt-1 text-xs text-slate-500">
-            At least 10 characters, with an uppercase letter, lowercase letter, and a number.
-          </p>
-        </div>
+        <PasswordField
+          id="password"
+          label="Password"
+          value={password}
+          onChange={setPassword}
+          autoComplete="new-password"
+          required
+          hint="At least 10 characters, with an uppercase letter, lowercase letter, and a number."
+        />
         <button type="submit" disabled={submitting} className="btn-primary w-full">
           {submitting ? "Creating account…" : "Create school account"}
         </button>
