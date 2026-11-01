@@ -67,7 +67,13 @@ export async function createSchoolCheckoutSession(
   if (!env.STRIPE_SCHOOL_PRICE_ID) {
     throw new Error("STRIPE_SCHOOL_PRICE_ID is not configured");
   }
+  if (!env.STRIPE_SCHOOL_BASE_PRICE_ID) {
+    throw new Error("STRIPE_SCHOOL_BASE_PRICE_ID is not configured");
+  }
 
+  // Two independent line items on one subscription: the per-seat price (multiplied by
+  // seatCount) and a flat monthly platform fee (quantity 1) — see billing-service.ts's school
+  // branch of applySubscriptionEvent for how the webhook tells them apart afterward.
   const session = await client.createCheckoutSession({
     priceId: env.STRIPE_SCHOOL_PRICE_ID,
     customerEmail: contactEmail,
@@ -76,6 +82,7 @@ export async function createSchoolCheckoutSession(
     ownerKind: "school",
     ownerId: schoolAccountId,
     quantity: seatCount,
+    additionalLineItem: { priceId: env.STRIPE_SCHOOL_BASE_PRICE_ID },
   });
 
   return session.url;

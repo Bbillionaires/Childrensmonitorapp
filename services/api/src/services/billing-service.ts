@@ -112,7 +112,11 @@ export async function getApiClientKeyStatus(
  * our own data. Idempotent — Stripe redelivers events, so this only ever upserts by the
  * owner's unique id, never appends.
  */
-export async function applySubscriptionEvent(emailSender: EmailSender, event: SubscriptionEventPayload): Promise<void> {
+export async function applySubscriptionEvent(
+  emailSender: EmailSender,
+  env: Env,
+  event: SubscriptionEventPayload,
+): Promise<void> {
   if (event.ownerKind === "parent") {
     await prisma.parentSubscription.upsert({
       where: { parentAccountId: event.ownerId },
@@ -139,17 +143,26 @@ export async function applySubscriptionEvent(emailSender: EmailSender, event: Su
     // Always an update, never an upsert: registerSchoolAdmin creates the SchoolAccount row at
     // registration, well before any checkout exists — the same assumption the api_client
     // branch below makes (signUpApiClient's upsert-by-email always precedes its checkout too).
-    // seatCount always comes from Stripe's own subscription quantity at event time, never
+    // seatCount always comes from Stripe's own subscription line items at event time, never
     // trusted from any client-supplied value — see school-service.ts's inviteParentToSchool,
     // which re-checks the seat limit against this column, not against what an admin *asked*
     // to buy.
+    //
+    // The school subscription carries two line items (see createSchoolCheckoutSession): the
+    // per-seat price (STRIPE_SCHOOL_PRICE_ID, quantity = seat count) and a flat base-fee price
+    // (STRIPE_SCHOOL_BASE_PRICE_ID, quantity 1). Matching by priceId rather than array order
+    // means a future reordering or a customer-portal-driven change to the subscription can
+    // never silently read the base fee's quantity (always 1) as the seat count.
+    const seatLineItem = event.lineItems.find((item) => item.priceId === env.STRIPE_SCHOOL_PRICE_ID);
+    const seatCount = seatLineItem?.quantity ?? 0;
+
     await prisma.schoolAccount.update({
       where: { id: event.ownerId },
       data: {
         stripeCustomerId: event.stripeCustomerId,
         stripeSubscriptionId: event.stripeSubscriptionId,
         status: event.status,
-        seatCount: event.quantity,
+        seatCount,
       },
     });
 
@@ -158,7 +171,7 @@ export async function applySubscriptionEvent(emailSender: EmailSender, event: Su
       action: "SCHOOL_SUBSCRIPTION_STATUS_CHANGED",
       targetType: "SchoolAccount",
       targetId: event.ownerId,
-      metadata: { status: event.status, seatCount: event.quantity },
+      metadata: { status: event.status, seatCount },
     });
     return;
   }

@@ -70,7 +70,7 @@ export async function billingWebhookRoutes(
 
     const payload = extractSubscriptionEvent(event);
     if (payload) {
-      await applySubscriptionEvent(emailSender, payload);
+      await applySubscriptionEvent(emailSender, env, payload);
     }
 
     return reply.send({ received: true });

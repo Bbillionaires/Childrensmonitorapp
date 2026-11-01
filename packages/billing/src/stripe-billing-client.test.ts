@@ -103,19 +103,27 @@ describe("extractSubscriptionEvent", () => {
       stripeCustomerId: "cus_123",
       stripeSubscriptionId: "sub_123",
       status: "ACTIVE",
-      quantity: 1,
+      lineItems: [],
     });
   });
 
-  it("reads the seat quantity off the subscription's own line item (for school owner kind)", () => {
+  it("reads every line item's priceId/quantity off the subscription (school owner kind has two: per-seat + base fee)", () => {
     const result = extractSubscriptionEvent(
       subscriptionEvent("customer.subscription.updated", {
         metadata: { ownerKind: "school", ownerId: "school-1" },
-        items: { data: [{ quantity: 25 }] },
+        items: {
+          data: [
+            { price: "price_per_seat", quantity: 25 },
+            { price: "price_base_fee", quantity: 1 },
+          ],
+        },
       }),
     );
     expect(result?.ownerKind).toBe("school");
-    expect(result?.quantity).toBe(25);
+    expect(result?.lineItems).toEqual([
+      { priceId: "price_per_seat", quantity: 25 },
+      { priceId: "price_base_fee", quantity: 1 },
+    ]);
   });
 
   it("maps every Stripe status to this app's SubscriptionStatus enum", () => {

@@ -35,6 +35,10 @@ const envSchema = z.object({
   // Milestone 11 — a per-seat monthly price; Stripe multiplies it by the seat quantity a
   // school purchases at checkout. See SCHOOL_SEATS.md.
   STRIPE_SCHOOL_PRICE_ID: z.string().optional(),
+  // The school tier is base fee + per-seat: STRIPE_SCHOOL_PRICE_ID is the per-seat price
+  // (quantity = seat count), STRIPE_SCHOOL_BASE_PRICE_ID is a flat platform fee (quantity 1)
+  // billed on the same subscription as a second line item — see school-service.ts.
+  STRIPE_SCHOOL_BASE_PRICE_ID: z.string().optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;

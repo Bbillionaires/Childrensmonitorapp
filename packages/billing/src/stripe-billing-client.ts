@@ -60,10 +60,14 @@ export class StripeBillingClient {
 
   async createCheckoutSession(params: CreateCheckoutSessionParams): Promise<CheckoutSession> {
     const metadata = { ownerKind: params.ownerKind, ownerId: params.ownerId };
+    const lineItems = [{ price: params.priceId, quantity: params.quantity ?? 1 }];
+    if (params.additionalLineItem) {
+      lineItems.push({ price: params.additionalLineItem.priceId, quantity: params.additionalLineItem.quantity ?? 1 });
+    }
     const session = await this.stripe.checkout.sessions.create({
       mode: "subscription",
       customer_email: params.customerEmail,
-      line_items: [{ price: params.priceId, quantity: params.quantity ?? 1 }],
+      line_items: lineItems,
       success_url: params.successUrl,
       cancel_url: params.cancelUrl,
       client_reference_id: `${params.ownerKind}:${params.ownerId}`,
@@ -120,7 +124,10 @@ export function extractSubscriptionEvent(event: Stripe.Event): SubscriptionEvent
     stripeCustomerId: customerIdOf(subscription.customer),
     stripeSubscriptionId: subscription.id,
     status: mapStripeStatus(subscription.status),
-    quantity: subscription.items?.data[0]?.quantity ?? 1,
+    lineItems: (subscription.items?.data ?? []).map((item) => ({
+      priceId: typeof item.price === "string" ? item.price : item.price.id,
+      quantity: item.quantity ?? 1,
+    })),
   };
 }
 

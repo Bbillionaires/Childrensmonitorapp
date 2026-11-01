@@ -33,6 +33,10 @@ export interface CreateCheckoutSessionParams {
   /** Line-item quantity — only ever set by the "school" seat-based checkout path (Stripe
    *  multiplies the per-seat price by this). Omitted (defaults to 1) for parent/api_client. */
   quantity?: number;
+  /** A second, independent Checkout line item — only ever the "school" tier's flat monthly
+   *  platform fee (quantity defaults to 1), billed on the same subscription alongside the
+   *  per-seat `priceId` above. Omitted for parent/api_client, which are single-line-item. */
+  additionalLineItem?: { priceId: string; quantity?: number };
 }
 
 export interface CheckoutSession {
@@ -47,10 +51,12 @@ export interface SubscriptionEventPayload {
   stripeCustomerId: string;
   stripeSubscriptionId: string;
   status: SubscriptionStatusValue;
-  /** The subscription's own item quantity at event time — only meaningful for "school"
-   *  (seat count); always 1 for parent/api_client. Read from Stripe's event, never trusted
-   *  from anywhere else, so a school's seat count can never be inflated client-side. */
-  quantity: number;
+  /** Every line item on the subscription at event time (priceId + quantity), read straight
+   *  from Stripe's own event — never trusted from anywhere else. A "school" subscription
+   *  carries two (the per-seat price and the flat base-fee price); parent/api_client carry
+   *  one. The school branch of applySubscriptionEvent matches on priceId to find the seat
+   *  count specifically, rather than assuming line-item order. */
+  lineItems: Array<{ priceId: string; quantity: number }>;
 }
 
 /**

@@ -10,6 +10,7 @@ process.env.WEB_APP_ORIGIN ??= "http://localhost:3000";
 process.env.STRIPE_SECRET_KEY = "sk_test_fake";
 process.env.STRIPE_WEBHOOK_SECRET = "whsec_fake";
 process.env.STRIPE_SCHOOL_PRICE_ID = "price_school_fake";
+process.env.STRIPE_SCHOOL_BASE_PRICE_ID = "price_school_base_fake";
 delete process.env.RESEND_API_KEY;
 delete process.env.YOUTUBE_API_KEY;
 
@@ -43,7 +44,15 @@ function schoolSubscriptionEvent(schoolAccountId: string, status: string, seatCo
         customer: `cus_${schoolAccountId}`,
         status,
         metadata: { ownerKind: "school", ownerId: schoolAccountId },
-        items: { data: [{ quantity: seatCount }] },
+        // Two line items, matching the real checkout (see createSchoolCheckoutSession) — the
+        // base fee is deliberately listed first here to prove the school branch of
+        // applySubscriptionEvent matches by priceId, not by array position.
+        items: {
+          data: [
+            { price: "price_school_base_fake", quantity: 1 },
+            { price: "price_school_fake", quantity: seatCount },
+          ],
+        },
       },
     },
   };
