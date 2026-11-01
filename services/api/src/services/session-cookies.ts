@@ -20,6 +20,24 @@ function cookieSameSite(): "lax" | "none" {
 }
 
 /**
+ * Host-only by default (no Domain attribute) scopes a cookie to the exact host that set it —
+ * fine for the httpOnly cookies, which only need to be sent back on requests *to* the API, but
+ * fatal for `csrf_token`: it's deliberately non-httpOnly so the web app's own JS can read it
+ * via `document.cookie` and echo it back as `X-CSRF-Token` (the double-submit pattern), and JS
+ * cookie access is scoped by the *page's* origin, not the request's. A page on `watchingwise.com`
+ * can never read a cookie host-scoped to `api.watchingwise.com` — confirmed live (login/session
+ * cookies worked, since those are sent automatically by the browser regardless of which page
+ * triggered the request, but every CSRF-guarded POST failed with "Missing or invalid CSRF
+ * token" once the web app moved to the custom domain). Setting COOKIE_DOMAIN to the shared
+ * parent domain (e.g. "watchingwise.com") makes the cookie valid across every subdomain,
+ * including both the web app's host and the API's — unset (the default) preserves today's
+ * host-only behavior for any deployment that doesn't share a parent domain between the two.
+ */
+function cookieDomain(): string | undefined {
+  return process.env.COOKIE_DOMAIN || undefined;
+}
+
+/**
  * Sessions travel as httpOnly cookies (see SECURITY_AND_PRIVACY.md) plus a readable
  * double-submit CSRF cookie the client must echo back as `X-CSRF-Token` on mutating
  * requests (checked by the `requireCsrfHeader` preHandler in plugins/auth.ts).
@@ -32,6 +50,7 @@ export function setSessionCookies(
     httpOnly: true,
     sameSite: cookieSameSite(),
     secure: isProduction(),
+    domain: cookieDomain(),
     path: "/",
     maxAge: ACCESS_TOKEN_MAX_AGE_SECONDS,
   });
@@ -39,6 +58,7 @@ export function setSessionCookies(
     httpOnly: true,
     sameSite: cookieSameSite(),
     secure: isProduction(),
+    domain: cookieDomain(),
     path: "/api/auth",
     expires: params.refreshTokenExpiresAt,
   });
@@ -46,15 +66,19 @@ export function setSessionCookies(
     httpOnly: false,
     sameSite: cookieSameSite(),
     secure: isProduction(),
+    domain: cookieDomain(),
     path: "/",
     expires: params.refreshTokenExpiresAt,
   });
 }
 
 export function clearSessionCookies(reply: FastifyReply): void {
-  reply.clearCookie("access_token", { path: "/" });
-  reply.clearCookie("refresh_token", { path: "/api/auth" });
-  reply.clearCookie("csrf_token", { path: "/" });
+  // A browser only deletes a cookie whose name, path, AND domain all match exactly — clearing
+  // without the same domain() used to set it would silently no-op against a domain-scoped
+  // cookie, leaving the old session cookie alive.
+  reply.clearCookie("access_token", { path: "/", domain: cookieDomain() });
+  reply.clearCookie("refresh_token", { path: "/api/auth", domain: cookieDomain() });
+  reply.clearCookie("csrf_token", { path: "/", domain: cookieDomain() });
 }
 
 /**
@@ -76,6 +100,7 @@ export function setChildSessionCookies(
     httpOnly: true,
     sameSite: cookieSameSite(),
     secure: isProduction(),
+    domain: cookieDomain(),
     path: "/",
     maxAge: params.expiresInSeconds,
   });
@@ -83,8 +108,9 @@ export function setChildSessionCookies(
     httpOnly: false,
     sameSite: cookieSameSite(),
     secure: isProduction(),
+    domain: cookieDomain(),
     path: "/",
     maxAge: params.expiresInSeconds,
   });
-  reply.clearCookie("refresh_token", { path: "/api/auth" });
+  reply.clearCookie("refresh_token", { path: "/api/auth", domain: cookieDomain() });
 }

@@ -17,6 +17,14 @@ const envSchema = z.object({
   // request, so every domain users might actually land on needs to be listed here. Comma-
   // separated; WEB_APP_ORIGIN itself is always trusted and never needs repeating in this list.
   ADDITIONAL_CORS_ORIGINS: z.string().optional(),
+  // Shares session cookies across the web app's and the API's hosts when they sit under a
+  // common parent domain (e.g. "watchingwise.com" covers both watchingwise.com and
+  // api.watchingwise.com) — required for the CSRF double-submit cookie, which the web app's
+  // own JS must be able to read via document.cookie. Unset preserves today's host-only
+  // cookie behavior. See session-cookies.ts; read directly from process.env there (not via
+  // loadEnv()) following that file's existing isProduction() convention — declared here only
+  // for documentation consistency with every other operator-configurable value.
+  COOKIE_DOMAIN: z.string().optional(),
 
   // Optional — required only once the corresponding milestone's feature is exercised.
   // Left unset in Milestone 1; see IMPLEMENTATION_PLAN.md for what each unlocks.
