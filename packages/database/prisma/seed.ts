@@ -54,19 +54,36 @@ async function main() {
   );
 
   // Milestone 12: provisions the first admin console login from ADMIN_BOOTSTRAP_EMAIL/
-  // ADMIN_BOOTSTRAP_PASSWORD, since there is no public admin registration endpoint. Only
-  // creates the account the first time — an existing User at this email keeps its current
-  // password rather than being silently reset on every deploy.
+  // ADMIN_BOOTSTRAP_PASSWORD, since there is no public admin registration endpoint. Idempotent
+  // once converted: an existing User whose role is already ADMIN is left untouched (keeps its
+  // current password rather than being silently reset on every deploy).
+  //
+  // If ADMIN_BOOTSTRAP_EMAIL belongs to an existing non-admin User (e.g. a parent who
+  // registered through the normal signup flow before being designated an admin), this
+  // *converts* that account: its ParentAccount/SchoolAdminAccount (and everything cascading
+  // from it — children, playlists, approvals) is deleted, and the User becomes a pure ADMIN
+  // login with the given password. This is deliberate, operator-only, one-time-per-email
+  // behavior — only someone with Railway environment-variable access can trigger it, and only
+  // by pointing this var at a specific email on purpose. Confirmed explicitly with the
+  // account owner before using this for helpthekidswin@gmail.com (an empty/disposable parent
+  // account) — see ADMIN_CONSOLE.md.
   const bootstrapEmail = process.env.ADMIN_BOOTSTRAP_EMAIL;
   const bootstrapPassword = process.env.ADMIN_BOOTSTRAP_PASSWORD;
   if (bootstrapEmail && bootstrapPassword) {
     const existing = await prisma.user.findUnique({ where: { email: bootstrapEmail } });
+    const passwordHash = await hashPassword(bootstrapPassword);
     if (!existing) {
-      const passwordHash = await hashPassword(bootstrapPassword);
       await prisma.user.create({
         data: { email: bootstrapEmail, passwordHash, role: "ADMIN" },
       });
       console.log(`Provisioned admin account for ${bootstrapEmail}.`);
+    } else if (existing.role !== "ADMIN") {
+      await prisma.$transaction([
+        prisma.parentAccount.deleteMany({ where: { userId: existing.id } }),
+        prisma.schoolAdminAccount.deleteMany({ where: { userId: existing.id } }),
+        prisma.user.update({ where: { id: existing.id }, data: { role: "ADMIN", passwordHash } }),
+      ]);
+      console.log(`Converted existing account at ${bootstrapEmail} to an admin login.`);
     }
   }
 }
