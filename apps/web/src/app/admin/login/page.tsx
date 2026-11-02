@@ -4,11 +4,13 @@ import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { adminLoginRequestSchema } from "@app/types";
 import { ApiError, apiFetch } from "@/lib/api";
+import { useAdminAuth } from "@/lib/admin-auth-context";
 import { AuthCard } from "@/components/auth-card";
 import { PasswordField } from "@/components/password-field";
 
 export default function AdminLoginPage() {
   const router = useRouter();
+  const { refresh } = useAdminAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -27,6 +29,7 @@ export default function AdminLoginPage() {
     setSubmitting(true);
     try {
       await apiFetch("/api/admin/login", { method: "POST", body: parsed.data });
+      await refresh();
       router.push("/admin");
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Something went wrong");
