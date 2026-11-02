@@ -96,8 +96,13 @@ export async function registerSchoolAdmin(
 
 export async function refreshSchoolAdminSession(env: Env, refreshToken: string): Promise<IssuedSchoolSession> {
   const tokenHash = hashOpaqueToken(refreshToken);
-  const existing = await prisma.refreshToken.findUnique({ where: { tokenHash } });
-  if (!existing || existing.revokedAt || existing.expiresAt < new Date()) {
+  const existing = await prisma.refreshToken.findUnique({
+    where: { tokenHash },
+    include: { user: { include: { schoolAdminAccount: true } } },
+  });
+  // Role membership checked before rotating — see auth-service.ts's refreshSession for why a
+  // cross-role refresh attempt must fail without burning the token it was never meant for.
+  if (!existing || existing.revokedAt || existing.expiresAt < new Date() || !existing.user.schoolAdminAccount) {
     throw new SchoolAuthError("Invalid or expired session", 401);
   }
 

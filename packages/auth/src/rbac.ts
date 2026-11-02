@@ -1,4 +1,10 @@
-import type { ChildSessionClaims, ParentSessionClaims, SchoolAdminSessionClaims, SessionClaims } from "@app/types";
+import type {
+  AdminSessionClaims,
+  ChildSessionClaims,
+  ParentSessionClaims,
+  SchoolAdminSessionClaims,
+  SessionClaims,
+} from "@app/types";
 
 /**
  * Framework-agnostic RBAC assertions, shared by every route in services/api so the
@@ -29,6 +35,12 @@ export function assertChildSession(claims: SessionClaims): asserts claims is Chi
 export function assertSchoolAdminSession(claims: SessionClaims): asserts claims is SchoolAdminSessionClaims {
   if (claims.role !== "SCHOOL_ADMIN") {
     throw new ForbiddenError("This action requires a school admin session");
+  }
+}
+
+export function assertAdminSession(claims: SessionClaims): asserts claims is AdminSessionClaims {
+  if (claims.role !== "ADMIN") {
+    throw new ForbiddenError("This action requires an admin session");
   }
 }
 

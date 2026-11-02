@@ -10,6 +10,7 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/approved-content", label: "Approved Content", status: "ready" },
   { href: "/pending-reviews", label: "Pending Reviews", status: "ready" },
   { href: "/playlists", label: "Playlists", status: "ready" },
+  { href: "/marketplace", label: "Marketplace", status: "ready" },
   { href: "/discover", label: "Discover Content", status: "ready" },
   { href: "/websites", label: "Websites", status: "soon" },
   { href: "/activity", label: "Viewing Activity", status: "ready" },

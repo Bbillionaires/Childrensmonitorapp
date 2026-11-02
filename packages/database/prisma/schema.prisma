@@ -40,6 +40,10 @@ model User {
   auditLogs           AuditLog[]
   passwordResetTokens PasswordResetToken[]
   refreshTokens       RefreshToken[]
+  // Milestone 12: a User with role ADMIN is the curator — admin has no separate profile table
+  // the way ParentAccount/SchoolAdminAccount are, since the role enum value alone is the
+  // identity (see AdminSessionClaims in packages/types).
+  curatedPlaylistsCreated CuratedPlaylist[]
 
   @@map("users")
 }
@@ -237,6 +241,7 @@ model Content {
   video                Video?
   website              Website?
   playlistItems        PlaylistItem[]
+  curatedPlaylistItems CuratedPlaylistItem[]
   parentApprovals      ParentApproval[]
   contentPermissions   ChildContentPermission[]
   viewingHistory       ViewingHistory[]
@@ -306,12 +311,25 @@ model Playlist {
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
+  // Milestone 12: set when this playlist is a parent's own clone of an admin-curated
+  // marketplace playlist (see marketplace-service.ts) rather than something they imported
+  // themselves — null for every ordinary provider-imported playlist. SetNull (not Cascade) so
+  // deleting the curated source later never deletes a parent's own already-cloned copy, just
+  // detaches it.
+  sourceCuratedPlaylistId String?
+  sourceCuratedPlaylist   CuratedPlaylist? @relation(fields: [sourceCuratedPlaylistId], references: [id], onDelete: SetNull)
+
   items PlaylistItem[]
 
   // Scoped per-parent (unlike Content, which dedupes globally) — a playlist is each
   // parent's own organizational object, so re-importing the same provider playlist
   // refreshes *that parent's* Playlist row rather than ever being shared across families.
   @@unique([ownerParentAccountId, providerId, providerRefId])
+  // Re-adding the same curated playlist from the marketplace updates the parent's existing
+  // clone rather than creating a duplicate Playlist row. Postgres treats NULL as distinct in
+  // a unique index, so this only dedupes where sourceCuratedPlaylistId is non-null —
+  // provider-imported playlists keep deduping via the constraint above instead.
+  @@unique([ownerParentAccountId, sourceCuratedPlaylistId])
   @@index([ownerParentAccountId])
   @@map("playlists")
 }
@@ -330,6 +348,49 @@ model PlaylistItem {
   @@unique([playlistId, contentId])
   @@index([playlistId])
   @@map("playlist_items")
+}
+
+// ---------------------------------------------------------------------------
+// Admin-curated playlist marketplace (Milestone 12) — an admin builds a playlist the same
+// way a parent imports one (fetched through the same ContentProvider registry, never
+// scraped), but it belongs to no parent account and sits in a draft state (published: false)
+// until the admin is ready for parents to see it. A parent adding one from the marketplace
+// clones it into their own Playlist (see Playlist.sourceCuratedPlaylistId above and
+// marketplace-service.ts) — a curated playlist's own items are never directly visible to a
+// child; only the parent's cloned copy, which goes through the exact same per-child
+// approval flow as anything else, ever does.
+// ---------------------------------------------------------------------------
+
+model CuratedPlaylist {
+  id              String   @id @default(cuid())
+  title           String
+  description     String?
+  // Nullable + SetNull: losing the admin account that created this must never cascade-delete
+  // a curated playlist parents are already relying on.
+  createdByUserId String?
+  createdByUser   User?    @relation(fields: [createdByUserId], references: [id], onDelete: SetNull)
+  published       Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  items     CuratedPlaylistItem[]
+  playlists Playlist[]
+
+  @@map("curated_playlists")
+}
+
+model CuratedPlaylistItem {
+  id                String          @id @default(cuid())
+  curatedPlaylistId String
+  curatedPlaylist   CuratedPlaylist @relation(fields: [curatedPlaylistId], references: [id], onDelete: Cascade)
+  contentId         String
+  content           Content         @relation(fields: [contentId], references: [id], onDelete: Cascade)
+  position          Int
+  addedAt           DateTime        @default(now())
+
+  @@unique([curatedPlaylistId, contentId])
+  @@index([curatedPlaylistId])
+  @@map("curated_playlist_items")
 }
 
 // ---------------------------------------------------------------------------

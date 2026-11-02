@@ -2,7 +2,7 @@ import type { Prisma, PrismaClient } from "@app/database";
 
 export interface AuditEntry {
   actorUserId?: string;
-  actorRole: "PARENT" | "CHILD" | "SCHOOL_ADMIN" | "SYSTEM";
+  actorRole: "PARENT" | "CHILD" | "SCHOOL_ADMIN" | "ADMIN" | "SYSTEM";
   action: string;
   targetType: string;
   targetId?: string;

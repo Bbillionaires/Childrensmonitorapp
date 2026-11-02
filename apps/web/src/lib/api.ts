@@ -39,12 +39,15 @@ const AUTH_BOOTSTRAP_PATHS = new Set([
   "/api/schools/login",
   "/api/schools/register",
   "/api/schools/logout",
+  "/api/admin/login",
+  "/api/admin/logout",
 ]);
 
 function refreshEndpointFor(path: string): string | undefined {
   if (AUTH_BOOTSTRAP_PATHS.has(path)) return undefined;
   if (path.startsWith("/api/child")) return undefined;
   if (path.startsWith("/api/schools")) return "/api/schools/refresh";
+  if (path.startsWith("/api/admin")) return "/api/admin/refresh";
   return "/api/auth/refresh";
 }
 

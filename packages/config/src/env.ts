@@ -52,6 +52,14 @@ const envSchema = z.object({
   // (quantity = seat count), STRIPE_SCHOOL_BASE_PRICE_ID is a flat platform fee (quantity 1)
   // billed on the same subscription as a second line item — see school-service.ts.
   STRIPE_SCHOOL_BASE_PRICE_ID: z.string().optional(),
+
+  // Milestone 12 — consumed once by prisma/seed.ts to provision the first admin console
+  // login (role: ADMIN has no public registration endpoint). Idempotent: if a User with this
+  // email already exists, the seed leaves it alone rather than overwriting its password on
+  // every deploy. Unset skips admin provisioning entirely, same optionality as every other
+  // credential here.
+  ADMIN_BOOTSTRAP_EMAIL: z.string().optional(),
+  ADMIN_BOOTSTRAP_PASSWORD: z.string().optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;

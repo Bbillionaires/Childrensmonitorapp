@@ -127,9 +127,16 @@ export async function loginParent(
 
 export async function refreshSession(env: Env, refreshToken: string): Promise<IssuedSession> {
   const tokenHash = hashOpaqueToken(refreshToken);
-  const existing = await prisma.refreshToken.findUnique({ where: { tokenHash } });
+  const existing = await prisma.refreshToken.findUnique({
+    where: { tokenHash },
+    include: { user: { include: { parentAccount: true } } },
+  });
 
-  if (!existing || existing.revokedAt || existing.expiresAt < new Date()) {
+  // Checked — including role membership — *before* rotating: every role's refresh token
+  // shares the same table and cookie path, so a stray cross-role refresh attempt (e.g. the
+  // web app's root-level parent AuthProvider firing its background check on an admin or
+  // school-admin page) must fail here without burning that account's own still-good token.
+  if (!existing || existing.revokedAt || existing.expiresAt < new Date() || !existing.user.parentAccount) {
     throw new AuthError("Invalid or expired session", 401);
   }
 

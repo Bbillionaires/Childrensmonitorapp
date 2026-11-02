@@ -23,6 +23,9 @@ import v1AnalyzeRoutes from "./routes/v1-analyze.js";
 import schoolAuthRoutes from "./routes/school-auth.js";
 import schoolAdminRoutes from "./routes/school-admin.js";
 import schoolInviteRoutes from "./routes/school-invites.js";
+import adminAuthRoutes from "./routes/admin-auth.js";
+import adminRoutes from "./routes/admin.js";
+import marketplaceRoutes from "./routes/marketplace.js";
 import { createEmailSender } from "./services/email.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
@@ -76,6 +79,7 @@ export async function buildApp(): Promise<FastifyInstance> {
       await activityRoutes(instance, { env });
       await alertsRoutes(instance, { env });
       await reportsRoutes(instance, { env });
+      await marketplaceRoutes(instance, { env });
     },
     { prefix: "/api/parents" },
   );
@@ -125,6 +129,24 @@ export async function buildApp(): Promise<FastifyInstance> {
       await schoolAdminRoutes(instance, { env, billingClient, emailSender });
     },
     { prefix: "/api/schools" },
+  );
+
+  // Milestone 12: a platform operator's own console — a third, independent login space from
+  // parent/child/school sessions (see admin-auth-service.ts). No /register: the first admin
+  // is provisioned once by prisma/seed.ts from ADMIN_BOOTSTRAP_EMAIL/ADMIN_BOOTSTRAP_PASSWORD.
+  await app.register(
+    async (instance) => {
+      await adminAuthRoutes(instance, { env });
+    },
+    { prefix: "/api/admin" },
+  );
+
+  await app.register(
+    async (instance) => {
+      instance.addHook("preHandler", instance.requireAdminSession);
+      await adminRoutes(instance, { env, billingClient, emailSender });
+    },
+    { prefix: "/api/admin" },
   );
 
   // Stripe calls this directly: no parent/child session, and the exact raw request bytes

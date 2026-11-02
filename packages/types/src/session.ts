@@ -32,9 +32,19 @@ export const schoolAdminSessionClaimsSchema = z.object({
 });
 export type SchoolAdminSessionClaims = z.infer<typeof schoolAdminSessionClaimsSchema>;
 
+// Milestone 12: a platform admin's own identity — User.role === "ADMIN" IS the identity
+// (unlike ParentAccount/SchoolAdminAccount, there is no separate profile table to join
+// against), so this claims shape is the smallest of the four.
+export const adminSessionClaimsSchema = z.object({
+  role: z.literal("ADMIN"),
+  userId: z.string(),
+});
+export type AdminSessionClaims = z.infer<typeof adminSessionClaimsSchema>;
+
 export const sessionClaimsSchema = z.discriminatedUnion("role", [
   parentSessionClaimsSchema,
   childSessionClaimsSchema,
   schoolAdminSessionClaimsSchema,
+  adminSessionClaimsSchema,
 ]);
 export type SessionClaims = z.infer<typeof sessionClaimsSchema>;

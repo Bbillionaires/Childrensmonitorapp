@@ -1,4 +1,5 @@
 import { PrismaClient } from "@prisma/client";
+import { hashPassword } from "@app/auth";
 
 const prisma = new PrismaClient();
 
@@ -51,6 +52,23 @@ async function main() {
   console.log(
     `Seeded ${SAFETY_CATEGORIES.length} safety categories and ${CONTENT_PROVIDERS.length} content providers.`,
   );
+
+  // Milestone 12: provisions the first admin console login from ADMIN_BOOTSTRAP_EMAIL/
+  // ADMIN_BOOTSTRAP_PASSWORD, since there is no public admin registration endpoint. Only
+  // creates the account the first time — an existing User at this email keeps its current
+  // password rather than being silently reset on every deploy.
+  const bootstrapEmail = process.env.ADMIN_BOOTSTRAP_EMAIL;
+  const bootstrapPassword = process.env.ADMIN_BOOTSTRAP_PASSWORD;
+  if (bootstrapEmail && bootstrapPassword) {
+    const existing = await prisma.user.findUnique({ where: { email: bootstrapEmail } });
+    if (!existing) {
+      const passwordHash = await hashPassword(bootstrapPassword);
+      await prisma.user.create({
+        data: { email: bootstrapEmail, passwordHash, role: "ADMIN" },
+      });
+      console.log(`Provisioned admin account for ${bootstrapEmail}.`);
+    }
+  }
 }
 
 main()

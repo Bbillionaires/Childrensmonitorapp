@@ -23,6 +23,7 @@ proprietary **Supervision Score** safety-rating engine.
 | [SECURITY_AND_PRIVACY.md](./SECURITY_AND_PRIVACY.md) | COPPA posture, RBAC, encryption, data minimization |
 | [COMMERCIAL_API.md](./COMMERCIAL_API.md) | The B2B Supervision Score API: signup, auth, rate limits, billing |
 | [SCHOOL_SEATS.md](./SCHOOL_SEATS.md) | School seat-based subscriptions + the structured learning queue |
+| [ADMIN_CONSOLE.md](./ADMIN_CONSOLE.md) | Internal admin console: manual subscribers, payment links, curated playlist marketplace |
 | [IMPLEMENTATION_PLAN.md](./IMPLEMENTATION_PLAN.md) | Stack rationale, costs, milestone-by-milestone plan |
 
 ## Repository layout

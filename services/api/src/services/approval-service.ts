@@ -81,6 +81,10 @@ export async function decideApproval(
   // so they're simply not written in that branch below.
   isLearningContent = false,
   subject?: SchoolSubjectValue,
+  // Milestone 12 — an admin acting on a subscriber's behalf (routes/admin.ts) is still this
+  // same decision logic, just with a different actor; the audit trail needs to say so rather
+  // than claim every decision was the parent's own.
+  actorRole: "PARENT" | "ADMIN" = "PARENT",
 ): Promise<void> {
   await assertOwnedChild(parentAccountId, childId);
 
@@ -119,7 +123,7 @@ export async function decideApproval(
 
   await writeAuditLog(prisma, {
     actorUserId,
-    actorRole: "PARENT",
+    actorRole,
     action: decision === "APPROVED" ? "CONTENT_APPROVED_FOR_CHILD" : "CONTENT_REJECTED_FOR_CHILD",
     targetType: "Content",
     targetId: contentId,

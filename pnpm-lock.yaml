@@ -208,6 +208,9 @@ importers:
 
   packages/database:
     dependencies:
+      '@app/auth':
+        specifier: workspace:*
+        version: link:../auth
       '@prisma/client':
         specifier: ^5.20.0
         version: 5.22.0(prisma@5.22.0)
