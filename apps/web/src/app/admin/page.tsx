@@ -16,6 +16,7 @@ export default function AdminSubscribersPage() {
   const [success, setSuccess] = useState<string | null>(null);
   const [sendingLinkFor, setSendingLinkFor] = useState<string | null>(null);
   const [sentLinks, setSentLinks] = useState<Record<string, string>>({});
+  const [grantingFor, setGrantingFor] = useState<string | null>(null);
 
   async function loadSubscribers(query?: string) {
     const params = query ? `?search=${encodeURIComponent(query)}` : "";
@@ -66,6 +67,16 @@ export default function AdminSubscribersPage() {
       setSentLinks((prev) => ({ ...prev, [parentAccountId]: url }));
     } finally {
       setSendingLinkFor(null);
+    }
+  }
+
+  async function handleGrantFreeAccess(parentAccountId: string) {
+    setGrantingFor(parentAccountId);
+    try {
+      await apiFetch(`/api/admin/subscribers/${parentAccountId}/grant-access`, { method: "POST" });
+      await loadSubscribers(search);
+    } finally {
+      setGrantingFor(null);
     }
   }
 
@@ -145,13 +156,22 @@ export default function AdminSubscribersPage() {
               </p>
             </div>
             <div className="flex flex-col items-end gap-1">
-              <button
-                className="btn-secondary"
-                disabled={sendingLinkFor === subscriber.parentAccountId}
-                onClick={() => void handleSendPaymentLink(subscriber.parentAccountId)}
-              >
-                {sendingLinkFor === subscriber.parentAccountId ? "Sending…" : "Send payment link"}
-              </button>
+              <div className="flex gap-2">
+                <button
+                  className="btn-secondary"
+                  disabled={sendingLinkFor === subscriber.parentAccountId}
+                  onClick={() => void handleSendPaymentLink(subscriber.parentAccountId)}
+                >
+                  {sendingLinkFor === subscriber.parentAccountId ? "Sending…" : "Send payment link"}
+                </button>
+                <button
+                  className="btn-secondary"
+                  disabled={grantingFor === subscriber.parentAccountId}
+                  onClick={() => void handleGrantFreeAccess(subscriber.parentAccountId)}
+                >
+                  {grantingFor === subscriber.parentAccountId ? "Granting…" : "Grant free access"}
+                </button>
+              </div>
               {sentLinks[subscriber.parentAccountId] && (
                 <p className="max-w-xs truncate text-xs text-slate-500">
                   Sent: {sentLinks[subscriber.parentAccountId]}

@@ -128,6 +128,37 @@ export async function createPaymentLink(
   return url;
 }
 
+/**
+ * Comps a subscriber in directly — no Stripe session, no trial clock, no card ever involved.
+ * Upserts the ParentSubscription row straight to ACTIVE; stripeCustomerId is required/unique
+ * on that model but a comped account has no real Stripe customer, so it gets a clearly-marked
+ * sentinel value instead of a fabricated-looking real one. requireActiveSubscription only ever
+ * checks `status` (see isSubscriptionEntitled), so this is honored everywhere a real paid
+ * subscription would be, with nothing elsewhere needing to know the difference.
+ */
+export async function grantFreeAccess(adminUserId: string, parentAccountId: string): Promise<void> {
+  const parentAccount = await prisma.parentAccount.findUnique({ where: { id: parentAccountId } });
+  if (!parentAccount) throw new NotFoundError("Subscriber not found");
+
+  await prisma.parentSubscription.upsert({
+    where: { parentAccountId },
+    update: { status: "ACTIVE" },
+    create: {
+      parentAccountId,
+      stripeCustomerId: `comped_${parentAccountId}`,
+      status: "ACTIVE",
+    },
+  });
+
+  await writeAuditLog(prisma, {
+    actorUserId: adminUserId,
+    actorRole: "ADMIN",
+    action: "FREE_ACCESS_GRANTED_BY_ADMIN",
+    targetType: "ParentAccount",
+    targetId: parentAccountId,
+  });
+}
+
 export async function listParentChildren(parentAccountId: string): Promise<AdminChildSummary[]> {
   const children = await prisma.child.findMany({
     where: { parentAccountId, archivedAt: null },

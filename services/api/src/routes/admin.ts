@@ -19,6 +19,7 @@ import {
   AdminServiceError,
   createPaymentLink,
   createSubscriber,
+  grantFreeAccess,
   listParentChildren,
   listSubscribers,
   removePlaylistItem,
@@ -101,6 +102,21 @@ export default async function adminRoutes(
       } catch (error) {
         if (error instanceof NotFoundError) return reply.code(404).send({ error: error.message });
         if (error instanceof BillingNotConfiguredError) return reply.code(503).send({ error: error.message });
+        throw error;
+      }
+    },
+  );
+
+  fastify.post<{ Params: { parentAccountId: string } }>(
+    "/subscribers/:parentAccountId/grant-access",
+    { preHandler: fastify.requireCsrfHeader },
+    async (request, reply) => {
+      const claims = request.sessionClaims as AdminSessionClaims;
+      try {
+        await grantFreeAccess(claims.userId, request.params.parentAccountId);
+        return reply.send({ ok: true });
+      } catch (error) {
+        if (error instanceof NotFoundError) return reply.code(404).send({ error: error.message });
         throw error;
       }
     },
