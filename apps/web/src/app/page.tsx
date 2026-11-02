@@ -1,9 +1,10 @@
 import Link from "next/link";
 import { WatchingWiseHero } from "@/components/watchingwise-hero";
+import { InstallAppSection } from "@/components/install-app-section";
 
 export default function LandingPage() {
   return (
-    <main className="mx-auto flex min-h-screen max-w-3xl flex-col items-center justify-center gap-8 px-4 text-center">
+    <main className="mx-auto flex min-h-screen max-w-3xl flex-col items-center justify-center gap-8 px-4 py-12 text-center">
       <WatchingWiseHero />
       <div>
         <p className="mb-2 text-sm font-semibold uppercase tracking-wide text-brand-600">
@@ -25,6 +26,7 @@ export default function LandingPage() {
           Sign in
         </Link>
       </div>
+      <InstallAppSection />
     </main>
   );
 }
