@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { ApprovalDecisionValue, BulkApprovalResponse, PlaylistSummary } from "@app/types";
+import Link from "next/link";
+import type { ApprovalDecisionValue, BulkApprovalResponse, ContentSummary, PlaylistSummary } from "@app/types";
 import { ApiError, apiFetch } from "@/lib/api";
 import { useChildren } from "@/lib/use-children";
+import { ContentSubmitForm } from "@/components/content-submit-form";
 
 export default function PlaylistsPage() {
   const children = useChildren();
@@ -16,6 +18,7 @@ export default function PlaylistsPage() {
   const [applying, setApplying] = useState<ApprovalDecisionValue | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [resultSummary, setResultSummary] = useState<string | null>(null);
+  const [addedVideo, setAddedVideo] = useState<ContentSummary | null>(null);
 
   async function loadPlaylists() {
     const data = await apiFetch<{ playlists: PlaylistSummary[] }>("/api/parents/playlists");
@@ -99,7 +102,7 @@ export default function PlaylistsPage() {
       <div>
         <h1 className="text-xl font-semibold text-slate-900">Playlists</h1>
         <p className="text-sm text-slate-500">
-          Import a playlist, then pick exactly which videos each child can see.
+          Import a whole playlist, or add one video at a time — then pick exactly what each child can see.
         </p>
       </div>
 
@@ -124,6 +127,17 @@ export default function PlaylistsPage() {
             </div>
           </div>
         </form>
+      </div>
+
+      <div className="card">
+        <h2 className="mb-1 text-sm font-semibold text-slate-900">Add a single video or website</h2>
+        <ContentSubmitForm onSubmitted={(content) => setAddedVideo(content)} />
+        {addedVideo && (
+          <p className="alert-success mt-3">
+            Added &ldquo;{addedVideo.title}&rdquo;.{" "}
+            <Link href="/pending-reviews" className="underline">Review it now</Link> to approve it for a child.
+          </p>
+        )}
       </div>
 
       {playlists && playlists.length > 0 && (
