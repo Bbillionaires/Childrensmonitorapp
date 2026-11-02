@@ -60,6 +60,13 @@ const envSchema = z.object({
   // credential here.
   ADMIN_BOOTSTRAP_EMAIL: z.string().optional(),
   ADMIN_BOOTSTRAP_PASSWORD: z.string().optional(),
+  // Symmetric reverse of the admin bootstrap above — restores (or creates) a plain parent
+  // login at this email, e.g. when an email that used to be the admin login hands that role
+  // off to a different address and goes back to being a regular parent. Same optionality and
+  // idempotence as ADMIN_BOOTSTRAP_*; display name defaults to "Parent" if unset.
+  PARENT_BOOTSTRAP_EMAIL: z.string().optional(),
+  PARENT_BOOTSTRAP_PASSWORD: z.string().optional(),
+  PARENT_BOOTSTRAP_DISPLAY_NAME: z.string().optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;

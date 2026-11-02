@@ -86,6 +86,43 @@ async function main() {
       console.log(`Converted existing account at ${bootstrapEmail} to an admin login.`);
     }
   }
+
+  // Symmetric to the admin bootstrap above, for the reverse direction: restores (or creates)
+  // a plain parent login at PARENT_BOOTSTRAP_EMAIL. Same deliberate, operator-only, idempotent
+  // shape — e.g. used to turn helpthekidswin@gmail.com back into a parent account once
+  // bbillionaires@gmail.com took over as the admin login instead.
+  const parentBootstrapEmail = process.env.PARENT_BOOTSTRAP_EMAIL;
+  const parentBootstrapPassword = process.env.PARENT_BOOTSTRAP_PASSWORD;
+  const parentBootstrapDisplayName = process.env.PARENT_BOOTSTRAP_DISPLAY_NAME ?? "Parent";
+  if (parentBootstrapEmail && parentBootstrapPassword) {
+    const existing = await prisma.user.findUnique({
+      where: { email: parentBootstrapEmail },
+      include: { parentAccount: true },
+    });
+    const passwordHash = await hashPassword(parentBootstrapPassword);
+    if (!existing) {
+      await prisma.user.create({
+        data: {
+          email: parentBootstrapEmail,
+          passwordHash,
+          role: "PARENT",
+          parentAccount: { create: { displayName: parentBootstrapDisplayName } },
+        },
+      });
+      console.log(`Provisioned parent account for ${parentBootstrapEmail}.`);
+    } else if (existing.role !== "PARENT" || !existing.parentAccount) {
+      await prisma.$transaction([
+        prisma.schoolAdminAccount.deleteMany({ where: { userId: existing.id } }),
+        prisma.user.update({ where: { id: existing.id }, data: { role: "PARENT", passwordHash } }),
+        prisma.parentAccount.upsert({
+          where: { userId: existing.id },
+          update: {},
+          create: { userId: existing.id, displayName: parentBootstrapDisplayName },
+        }),
+      ]);
+      console.log(`Converted existing account at ${parentBootstrapEmail} to a parent login.`);
+    }
+  }
 }
 
 main()
