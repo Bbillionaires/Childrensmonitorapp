@@ -65,15 +65,30 @@ export async function importPlaylist(
   // touches an existing ParentApproval/ChildContentPermission.
   await prisma.playlistItem.deleteMany({ where: { playlistId: playlist.id } });
 
+  // A real source playlist can list the same video more than once (YouTube allows duplicate
+  // entries) — upsertVideoContent dedupes those to a single Content row, but PlaylistItem's
+  // own (playlistId, contentId) unique constraint means a second row for the same pair is a
+  // genuine duplicate, not a new item. Upsert rather than create so a repeat just moves that
+  // item to its latest listed position instead of crashing the whole import partway through.
   const itemSummaries: PlaylistSummary["items"] = [];
+  const summaryIndexById = new Map<string, number>();
   for (let index = 0; index < items.length; index += 1) {
     const content = await upsertVideoContent(items[index]!, parentAccountId);
     await recordContentSubmission(parentAccountId, actorUserId, content, content.sourceUrl);
     await ensureContentScored(env, content.id);
-    const item = await prisma.playlistItem.create({
-      data: { playlistId: playlist.id, contentId: content.id, position: index },
+    const item = await prisma.playlistItem.upsert({
+      where: { playlistId_contentId: { playlistId: playlist.id, contentId: content.id } },
+      update: { position: index },
+      create: { playlistId: playlist.id, contentId: content.id, position: index },
     });
-    itemSummaries.push({ id: item.id, position: item.position, content: toContentSummary(content) });
+    const summary = { id: item.id, position: item.position, content: toContentSummary(content) };
+    const existingIndex = summaryIndexById.get(item.id);
+    if (existingIndex === undefined) {
+      summaryIndexById.set(item.id, itemSummaries.length);
+      itemSummaries.push(summary);
+    } else {
+      itemSummaries[existingIndex] = summary;
+    }
   }
 
   await writeAuditLog(prisma, {
